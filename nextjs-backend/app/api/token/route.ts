@@ -23,13 +23,13 @@ export async function GET(request: NextRequest) {
               rate: 24000,
             },
             transcription: {
-              model: "gpt-4o-transcribe",
+              model: "gpt-4o-mini-transcribe", // Faster, lower latency model
             },
             turn_detection: {
               type: "server_vad",
-              threshold: 0.5,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 200, // Reduced from 500ms for faster transcription
+              threshold: 0.4, // Lower threshold = more sensitive (faster detection)
+              prefix_padding_ms: 100, // Reduced padding for faster response
+              silence_duration_ms: 100, // Much shorter silence detection (was 200ms)
             },
           },
         },
