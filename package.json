@@ -1,0 +1,17 @@
+{
+  "name": "teleprompter",
+  "version": "1.0.0",
+  "description": "Framer-compatible teleprompter with voice-activated scrolling",
+  "main": "teleprompter.tsx",
+  "scripts": {
+    "install-deps": "npm install"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "framer": "^2.4.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0"
+  }
+}
