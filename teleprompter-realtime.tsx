@@ -49,6 +49,9 @@ export default function TeleprompterRealtime(props: Props) {
             }
             if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
                 mediaRecorderRef.current.stop()
+                // Stop all media tracks
+                const stream = mediaRecorderRef.current.stream
+                stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close()
@@ -130,9 +133,9 @@ export default function TeleprompterRealtime(props: Props) {
                 setConnectionStatus("disconnected")
                 setIsListening(false)
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error starting voice control:", err)
-            setError(err.message || "Failed to start voice control")
+            setError(err?.message || "Failed to start voice control")
             setConnectionStatus("error")
         }
     }
@@ -148,9 +151,12 @@ export default function TeleprompterRealtime(props: Props) {
                 }
             })
 
-            const mediaRecorder = new MediaRecorder(stream, {
-                mimeType: 'audio/webm',
-            })
+            // Check if browser supports the required MIME type
+            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+                ? 'audio/webm;codecs=opus' 
+                : 'audio/webm'
+
+            const mediaRecorder = new MediaRecorder(stream, { mimeType })
             mediaRecorderRef.current = mediaRecorder
 
             mediaRecorder.ondataavailable = async (event) => {
@@ -165,7 +171,7 @@ export default function TeleprompterRealtime(props: Props) {
                 }
             }
 
-            // Capture audio in chunks
+            // Capture audio in 100ms chunks for lower latency
             mediaRecorder.start(100)
         } catch (err) {
             console.error("Error capturing audio:", err)
@@ -190,8 +196,9 @@ export default function TeleprompterRealtime(props: Props) {
                     
                     // Auto-scroll based on word position
                     if (scriptRef.current) {
-                        const wordElement = scriptRef.current.children[j] as HTMLElement
-                        if (wordElement) {
+                        const scriptDiv = scriptRef.current.querySelector('div')
+                        if (scriptDiv && scriptDiv.children[j]) {
+                            const wordElement = scriptDiv.children[j] as HTMLElement
                             const containerHeight = scriptRef.current.clientHeight
                             const wordTop = wordElement.offsetTop
                             const targetScroll = Math.max(0, wordTop - containerHeight / 3)
@@ -210,6 +217,9 @@ export default function TeleprompterRealtime(props: Props) {
         }
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
             mediaRecorderRef.current.stop()
+            // Stop all tracks to release microphone
+            const stream = mediaRecorderRef.current.stream
+            stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
         }
         setIsListening(false)
         setConnectionStatus("disconnected")
@@ -234,7 +244,7 @@ export default function TeleprompterRealtime(props: Props) {
     React.useEffect(() => {
         if (!enableVoiceControl || !isListening) {
             const interval = setInterval(() => {
-                setScrollPosition((prev) => prev + scrollSpeed)
+                setScrollPosition((prev: number) => prev + scrollSpeed)
             }, 50)
             return () => clearInterval(interval)
         }
@@ -262,7 +272,7 @@ export default function TeleprompterRealtime(props: Props) {
                 }}
             >
                 <div style={{ fontSize, color: textColor, lineHeight: 1.6 }}>
-                    {words.map((word, index) => (
+                    {words.map((word: string, index: number) => (
                         <span
                             key={index}
                             style={{
