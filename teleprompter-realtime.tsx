@@ -34,8 +34,10 @@ export default function TeleprompterRealtime(props: Props) {
 
     const scriptRef = React.useRef<HTMLDivElement>(null)
     const wsRef = React.useRef<WebSocket | null>(null)
-    const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
     const audioContextRef = React.useRef<AudioContext | null>(null)
+    const processorRef = React.useRef<ScriptProcessorNode | null>(null)
+    const sourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
+    const streamRef = React.useRef<MediaStream | null>(null)
     const words = React.useMemo(() => script.split(/\s+/), [script])
 
     const VERCEL_TOKEN_URL = "https://speed-sermon-rttp.vercel.app/api/token"
@@ -47,11 +49,14 @@ export default function TeleprompterRealtime(props: Props) {
             if (wsRef.current) {
                 wsRef.current.close()
             }
-            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-                mediaRecorderRef.current.stop()
-                // Stop all media tracks
-                const stream = mediaRecorderRef.current.stream
-                stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+            if (processorRef.current) {
+                processorRef.current.disconnect()
+            }
+            if (sourceRef.current) {
+                sourceRef.current.disconnect()
+            }
+            if (streamRef.current) {
+                streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
             }
             if (audioContextRef.current) {
                 audioContextRef.current.close()
@@ -59,21 +64,13 @@ export default function TeleprompterRealtime(props: Props) {
         }
     }, [])
 
-    // Convert audio blob to PCM16
-    const convertToPCM16 = async (audioBlob: Blob): Promise<ArrayBuffer> => {
-        const arrayBuffer = await audioBlob.arrayBuffer()
-        const audioContext = audioContextRef.current || new AudioContext({ sampleRate: 24000 })
-        audioContextRef.current = audioContext
-
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
-        const pcm16 = new Int16Array(audioBuffer.length)
-        const channelData = audioBuffer.getChannelData(0)
-
-        for (let i = 0; i < channelData.length; i++) {
-            const s = Math.max(-1, Math.min(1, channelData[i]))
+    // Convert Float32 audio to PCM16
+    const floatTo16BitPCM = (float32Array: Float32Array): ArrayBuffer => {
+        const pcm16 = new Int16Array(float32Array.length)
+        for (let i = 0; i < float32Array.length; i++) {
+            const s = Math.max(-1, Math.min(1, float32Array[i]))
             pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
         }
-
         return pcm16.buffer
     }
 
@@ -150,29 +147,31 @@ export default function TeleprompterRealtime(props: Props) {
                     noiseSuppression: true,
                 }
             })
+            streamRef.current = stream
 
-            // Check if browser supports the required MIME type
-            const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-                ? 'audio/webm;codecs=opus' 
-                : 'audio/webm'
+            // Create audio context at 24kHz to match OpenAI requirements
+            const audioContext = new AudioContext({ sampleRate: 24000 })
+            audioContextRef.current = audioContext
 
-            const mediaRecorder = new MediaRecorder(stream, { mimeType })
-            mediaRecorderRef.current = mediaRecorder
+            const source = audioContext.createMediaStreamSource(stream)
+            sourceRef.current = source
 
-            mediaRecorder.ondataavailable = async (event) => {
-                if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                    try {
-                        // Convert to PCM16 and send
-                        const pcm16 = await convertToPCM16(event.data)
-                        ws.send(pcm16)
-                    } catch (err) {
-                        console.error("Error converting audio:", err)
-                    }
+            // Use ScriptProcessorNode for direct PCM access (deprecated but widely supported)
+            // Buffer size: 4096 samples = ~170ms at 24kHz (good balance of latency and efficiency)
+            const processor = audioContext.createScriptProcessor(4096, 1, 1)
+            processorRef.current = processor
+
+            processor.onaudioprocess = (e) => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    const inputData = e.inputBuffer.getChannelData(0)
+                    const pcm16 = floatTo16BitPCM(inputData)
+                    ws.send(pcm16)
                 }
             }
 
-            // Capture audio in 100ms chunks for lower latency
-            mediaRecorder.start(100)
+            // Connect: source -> processor -> destination (required for processing)
+            source.connect(processor)
+            processor.connect(audioContext.destination)
         } catch (err) {
             console.error("Error capturing audio:", err)
             setError("Microphone access denied")
@@ -215,11 +214,21 @@ export default function TeleprompterRealtime(props: Props) {
         if (wsRef.current) {
             wsRef.current.close()
         }
-        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-            mediaRecorderRef.current.stop()
-            // Stop all tracks to release microphone
-            const stream = mediaRecorderRef.current.stream
-            stream.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+        if (processorRef.current) {
+            processorRef.current.disconnect()
+            processorRef.current = null
+        }
+        if (sourceRef.current) {
+            sourceRef.current.disconnect()
+            sourceRef.current = null
+        }
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+            streamRef.current = null
+        }
+        if (audioContextRef.current) {
+            audioContextRef.current.close()
+            audioContextRef.current = null
         }
         setIsListening(false)
         setConnectionStatus("disconnected")
