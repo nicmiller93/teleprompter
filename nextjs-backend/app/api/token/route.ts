@@ -12,16 +12,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Session configuration for OpenAI Realtime API
+    // Session configuration for OpenAI Realtime API (transcription only)
     const sessionConfig = {
       session: {
-        type: "realtime",
-        model: "gpt-realtime",
-        instructions:
-          "You are a transcription assistant. Transcribe speech accurately.",
-        audio: {
-          output: { voice: "alloy" },
-        },
+        type: "transcription",
+        model: "whisper-1",
       },
     };
 

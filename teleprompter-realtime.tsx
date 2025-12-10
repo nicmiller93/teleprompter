@@ -107,22 +107,22 @@ export default function TeleprompterRealtime(props: Props) {
             dc.onmessage = (e) => {
                 try {
                     const event = JSON.parse(e.data)
-                    console.log("Received event:", event.type)
+                    console.log("Received event:", event.type, event)
 
-                    if (event.type === "conversation.item.input_audio_transcription.completed") {
+                    // Handle transcription events
+                    if (event.type === "transcription.completed") {
                         const transcript = event.transcript.toLowerCase()
                         console.log("Transcript:", transcript)
                         processTranscript(transcript)
-                    } else if (event.type === "input_audio_transcription.completed") {
-                        const transcript = (event.transcript || "").toLowerCase()
-                        console.log("Transcript:", transcript)
-                        processTranscript(transcript)
+                    } else if (event.type === "transcription.delta") {
+                        // Partial transcription updates
+                        console.log("Partial transcript:", event.delta)
                     } else if (event.type === "error") {
                         console.error("Error:", event.error)
                         setError(event.error.message || "Connection error")
                         setConnectionStatus("error")
                     } else if (event.type === "session.updated") {
-                        console.log("Session configured")
+                        console.log("Session configured:", event.session)
                     }
                 } catch (err) {
                     console.error("Error parsing event:", err)
