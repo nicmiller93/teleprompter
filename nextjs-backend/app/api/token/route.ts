@@ -12,11 +12,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Session configuration for OpenAI Realtime API (transcription only)
+    // Session configuration for OpenAI Realtime API
+    // Configure for transcription only - no AI responses
     const sessionConfig = {
       session: {
-        type: "transcription",
-        model: "whisper-1",
+        type: "realtime",
+        model: "gpt-realtime",
+        turn_detection: null, // Disable automatic turn detection to prevent responses
+        input_audio_transcription: {
+          model: "whisper-1",
+        },
       },
     };
 

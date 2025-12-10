@@ -109,14 +109,14 @@ export default function TeleprompterRealtime(props: Props) {
                     const event = JSON.parse(e.data)
                     console.log("Received event:", event.type, event)
 
-                    // Handle transcription events
-                    if (event.type === "transcription.completed") {
+                    // Handle input audio transcription events
+                    if (event.type === "conversation.item.input_audio_transcription.completed") {
                         const transcript = event.transcript.toLowerCase()
-                        console.log("Transcript:", transcript)
+                        console.log("Transcript completed:", transcript)
                         processTranscript(transcript)
-                    } else if (event.type === "transcription.delta") {
-                        // Partial transcription updates
-                        console.log("Partial transcript:", event.delta)
+                    } else if (event.type === "conversation.item.input_audio_transcription.delta") {
+                        // Partial transcription updates  
+                        console.log("Transcript delta:", event.delta)
                     } else if (event.type === "error") {
                         console.error("Error:", event.error)
                         setError(event.error.message || "Connection error")
