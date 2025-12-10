@@ -276,11 +276,18 @@ export default function TeleprompterRealtime(props: Props) {
                     width: "100%",
                     height: "calc(100% - 100px)",
                     overflowY: "auto",
+                    overflowX: "hidden",
                     padding: "40px",
                     scrollBehavior: "smooth",
                 }}
             >
-                <div style={{ fontSize, color: textColor, lineHeight: 1.6 }}>
+                <div style={{ 
+                    fontSize, 
+                    color: textColor, 
+                    lineHeight: 1.8,
+                    wordWrap: "break-word",
+                    whiteSpace: "normal",
+                }}>
                     {words.map((word: string, index: number) => (
                         <span
                             key={index}
@@ -291,10 +298,11 @@ export default function TeleprompterRealtime(props: Props) {
                                         : "transparent",
                                 padding: "2px 4px",
                                 marginRight: "8px",
+                                display: "inline",
                                 transition: "background-color 0.3s",
                             }}
                         >
-                            {word}
+                            {word}{" "}
                         </span>
                     ))}
                 </div>
