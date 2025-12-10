@@ -17,23 +17,10 @@ export async function GET(request: NextRequest) {
       session: {
         type: "realtime",
         model: "gpt-realtime",
-        modalities: ["text", "audio"],
         instructions:
           "You are a transcription assistant. Transcribe speech accurately.",
         audio: {
-          input: { format: "pcm16", sample_rate: 24000 },
-          output: { voice: "alloy", format: "pcm16", sample_rate: 24000 },
-        },
-        input_audio_transcription: {
-          enabled: true,
-          model: "whisper-1",
-        },
-        turn_detection: {
-          enabled: true,
-          type: "server_vad",
-          threshold: 0.5,
-          silence_duration_ms: 500,
-          prefix_padding_ms: 300,
+          output: { voice: "alloy" },
         },
       },
     };
