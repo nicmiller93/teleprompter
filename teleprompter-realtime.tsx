@@ -99,18 +99,25 @@ export default function TeleprompterRealtime(props: Props) {
             ws.onmessage = (event) => {
                 try {
                     const message = JSON.parse(event.data)
-                    console.log("Received:", message.type)
+                    console.log("Received:", message.type, message)
 
                     if (message.type === "connected") {
                         setConnectionStatus("connected")
                         setIsListening(true)
                         // Start capturing audio
                         startAudioCapture(ws)
+                    } else if (message.type === "disconnected") {
+                        console.error("OpenAI disconnected:", message.message)
+                        setError(`OpenAI disconnected: ${message.message || "Unknown reason"}`)
+                        setConnectionStatus("error")
+                        stopVoiceControl()
                     } else if (message.type === "conversation.item.input_audio_transcription.completed") {
                         // Handle transcription
                         const transcript = message.transcript.toLowerCase()
+                        console.log("Transcript:", transcript)
                         processTranscript(transcript)
                     } else if (message.type === "error") {
+                        console.error("Error from server:", message.message)
                         setError(message.message)
                         setConnectionStatus("error")
                     }

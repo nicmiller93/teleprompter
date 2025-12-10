@@ -105,6 +105,7 @@ WebSocket bridge created and ready for testing!
 ### ✅ What's been done:
 
 1. **Created new Framer component**: `teleprompter-realtime.tsx`
+
    - Uses OpenAI Realtime API (replacing Web Speech API)
    - Integrates with Vercel JWT endpoint
    - Connects to Render WebSocket bridge
@@ -113,6 +114,7 @@ WebSocket bridge created and ready for testing!
    - Word highlighting for spoken content
 
 2. **All services tested and working**:
+
    - ✅ Vercel: `https://speed-sermon-rttp.vercel.app/api/token`
    - ✅ Render: `wss://teleprompter-ws-bridge.onrender.com`
    - ✅ End-to-end flow verified

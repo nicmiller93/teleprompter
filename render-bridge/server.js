@@ -61,13 +61,20 @@ wss.on("connection", (clientWs, req) => {
         message = JSON.parse(dataStr);
         console.log(`[${connectionId}] Received JSON:`, message.type);
       } catch (e) {
-        // Not JSON - treat as binary audio data
+        // Not JSON - treat as binary audio data (PCM16)
         if (
           isAuthenticated &&
           openaiWs &&
           openaiWs.readyState === WebSocket.OPEN
         ) {
-          openaiWs.send(data);
+          // Convert binary audio to base64 and send as input_audio_buffer.append event
+          const audioBase64 = data.toString("base64");
+          openaiWs.send(
+            JSON.stringify({
+              type: "input_audio_buffer.append",
+              audio: audioBase64,
+            })
+          );
         }
         return;
       }
@@ -157,30 +164,6 @@ wss.on("connection", (clientWs, req) => {
 
       openaiWs.on("open", () => {
         console.log(`[${connId}] ✅ Connected to OpenAI Realtime API`);
-
-        // Configure session for speech-to-text
-        openaiWs.send(
-          JSON.stringify({
-            type: "session.update",
-            session: {
-              modalities: ["text", "audio"],
-              instructions:
-                "You are a transcription assistant. Transcribe speech accurately.",
-              voice: "alloy",
-              input_audio_format: "pcm16",
-              output_audio_format: "pcm16",
-              input_audio_transcription: {
-                model: "whisper-1",
-              },
-              turn_detection: {
-                type: "server_vad",
-                threshold: 0.5,
-                prefix_padding_ms: 300,
-                silence_duration_ms: 500,
-              },
-            },
-          })
-        );
 
         // Notify client of successful connection
         clientSocket.send(

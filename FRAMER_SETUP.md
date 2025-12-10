@@ -5,6 +5,7 @@ Voice-activated teleprompter using OpenAI Realtime API for professional-grade sp
 ## ✨ What's New
 
 This version (`teleprompter-realtime.tsx`) replaces the Web Speech API with:
+
 - **OpenAI Realtime API** - More accurate speech recognition
 - **Cloud Processing** - Works consistently across all browsers
 - **Secure Architecture** - JWT authentication with separate backend services
@@ -45,6 +46,7 @@ OpenAI Realtime API
 
 1. **Add to Canvas**: Drag the component onto your canvas
 2. **Configure** in the properties panel:
+
    - **Script**: Your teleprompter text
    - **Font Size**: Text size (16-72px)
    - **Colors**: Background, text, and highlight colors
@@ -69,15 +71,15 @@ OpenAI Realtime API
 
 ### Properties Available
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `script` | String | Sample text | Your teleprompter script |
-| `fontSize` | Number | 32 | Text size in pixels |
-| `scrollSpeed` | Number | 2 | Manual scroll speed |
-| `backgroundColor` | Color | #000000 | Background color |
-| `textColor` | Color | #FFFFFF | Text color |
-| `highlightColor` | Color | #FFD700 | Spoken word highlight |
-| `enableVoiceControl` | Boolean | true | Enable AI recognition |
+| Property             | Type    | Default     | Description              |
+| -------------------- | ------- | ----------- | ------------------------ |
+| `script`             | String  | Sample text | Your teleprompter script |
+| `fontSize`           | Number  | 32          | Text size in pixels      |
+| `scrollSpeed`        | Number  | 2           | Manual scroll speed      |
+| `backgroundColor`    | Color   | #000000     | Background color         |
+| `textColor`          | Color   | #FFFFFF     | Text color               |
+| `highlightColor`     | Color   | #FFD700     | Spoken word highlight    |
+| `enableVoiceControl` | Boolean | true        | Enable AI recognition    |
 
 ### Styling Tips
 
@@ -91,6 +93,7 @@ OpenAI Realtime API
 ### Required Services (Already Deployed)
 
 1. **Vercel JWT Service**
+
    - URL: `https://speed-sermon-rttp.vercel.app/api/token`
    - Generates authentication tokens
    - ✅ Already deployed and working
@@ -106,33 +109,38 @@ OpenAI Realtime API
 If you deploy your own instances, update these lines in the component:
 
 ```typescript
-const VERCEL_TOKEN_URL = "https://YOUR-VERCEL-APP.vercel.app/api/token"
-const RENDER_WS_URL = "wss://YOUR-RENDER-APP.onrender.com"
+const VERCEL_TOKEN_URL = "https://YOUR-VERCEL-APP.vercel.app/api/token";
+const RENDER_WS_URL = "wss://YOUR-RENDER-APP.onrender.com";
 ```
 
 ## 🐛 Troubleshooting
 
 ### "Microphone access denied"
+
 - Check browser permissions
 - Ensure HTTPS (required for microphone)
 - Try different browser
 
 ### "Connection error"
+
 - Check if backend services are running
 - Verify URLs are correct
 - Check browser console for details
 
 ### "Authentication failed"
+
 - JWT tokens expire after 5 minutes
 - Connection will auto-refresh token
 - If persists, check backend environment variables
 
 ### Words not highlighting
+
 - Speak clearly and at moderate pace
 - Ensure script text matches what you're saying
 - Check that words are separated by spaces
 
 ### Audio not being captured
+
 - Component requires 24kHz mono audio
 - Some browsers may need additional setup
 - Try Chrome/Edge for best compatibility
@@ -153,18 +161,19 @@ const RENDER_WS_URL = "wss://YOUR-RENDER-APP.onrender.com"
 
 ## 📊 Comparison: Old vs New
 
-| Feature | Web Speech API | OpenAI Realtime API |
-|---------|----------------|---------------------|
-| Accuracy | 85-90% | 95%+ |
-| Browser Support | Chrome only | All modern browsers |
-| Latency | 100-300ms | 200-500ms |
-| Cost | Free | ~$0.06/min |
-| Offline | Yes | No |
-| Languages | 100+ | English optimized |
+| Feature         | Web Speech API | OpenAI Realtime API |
+| --------------- | -------------- | ------------------- |
+| Accuracy        | 85-90%         | 95%+                |
+| Browser Support | Chrome only    | All modern browsers |
+| Latency         | 100-300ms      | 200-500ms           |
+| Cost            | Free           | ~$0.06/min          |
+| Offline         | Yes            | No                  |
+| Languages       | 100+           | English optimized   |
 
 ## 💰 Cost Estimate
 
 OpenAI Realtime API Pricing:
+
 - **Audio input**: $0.06 per minute
 - **Text generation**: $0.06 per minute (minimal for this use)
 
@@ -181,6 +190,7 @@ OpenAI Realtime API Pricing:
 ## 🔮 Future Enhancements
 
 Potential additions:
+
 - Multi-language support
 - Custom voice commands (pause, resume, skip)
 - Export transcript after session
@@ -194,6 +204,7 @@ This project is open source. Backend services are deployed and available for use
 ## 🆘 Support
 
 Issues or questions?
+
 - Check the troubleshooting section
 - Review browser console logs
 - Test backend services independently
