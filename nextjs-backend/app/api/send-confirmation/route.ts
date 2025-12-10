@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-const RESEND_API_KEY = "re_8rZz18uB_6xzNuHzxSAzGhzJNjaX3nrNm";
-
 export async function POST(request: Request) {
+  const RESEND_API_KEY = process.env.RESEND_API_KEY;
+
+  if (!RESEND_API_KEY) {
+    return NextResponse.json(
+      { error: "Resend API key not configured" },
+      { status: 500 }
+    );
+  }
   try {
     const { userName, userEmail, filename } = await request.json();
 
