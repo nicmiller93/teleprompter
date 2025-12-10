@@ -65,6 +65,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data, {
       headers: {
         "Cache-Control": "no-store",
+        "X-API-Version": "webrtc",
       },
     });
   } catch (error) {
