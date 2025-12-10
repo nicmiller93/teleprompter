@@ -12,11 +12,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Session configuration for OpenAI Realtime API
+    // Session configuration for OpenAI Realtime API (transcription-only mode)
     const sessionConfig = {
       session: {
-        type: "realtime",
-        model: "gpt-realtime",
+        type: "transcription",
+        audio: {
+          input: {
+            format: {
+              type: "audio/pcm",
+              rate: 24000,
+            },
+            transcription: {
+              model: "gpt-4o-transcribe",
+            },
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.5,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 500,
+            },
+          },
+        },
       },
     };
 
