@@ -27,9 +27,9 @@ export async function GET(request: NextRequest) {
             },
             turn_detection: {
               type: "server_vad",
-              threshold: 0.4, // Lower threshold = more sensitive (faster detection)
-              prefix_padding_ms: 100, // Reduced padding for faster response
-              silence_duration_ms: 100, // Much shorter silence detection (was 200ms)
+              threshold: 0.3, // Very sensitive - triggers almost immediately
+              prefix_padding_ms: 50, // Minimal padding
+              silence_duration_ms: 50, // Absolute minimum silence detection
             },
           },
         },
