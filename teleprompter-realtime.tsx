@@ -33,127 +33,58 @@ export default function TeleprompterRealtime(props: Props) {
     const [connectionStatus, setConnectionStatus] = React.useState<string>("disconnected")
 
     const scriptRef = React.useRef<HTMLDivElement>(null)
-    const wsRef = React.useRef<WebSocket | null>(null)
-    const audioContextRef = React.useRef<AudioContext | null>(null)
-    const processorRef = React.useRef<ScriptProcessorNode | null>(null)
-    const sourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
-    const streamRef = React.useRef<MediaStream | null>(null)
+    const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null)
+    const dataChannelRef = React.useRef<RTCDataChannel | null>(null)
+    const audioElementRef = React.useRef<HTMLAudioElement | null>(null)
     const words = React.useMemo(() => script.split(/\s+/), [script])
 
     const VERCEL_TOKEN_URL = "https://speed-sermon-rttp.vercel.app/api/token"
-    const RENDER_WS_URL = "wss://teleprompter-ws-bridge.onrender.com"
 
     // Cleanup on unmount
     React.useEffect(() => {
         return () => {
-            if (wsRef.current) {
-                wsRef.current.close()
+            if (dataChannelRef.current) {
+                dataChannelRef.current.close()
             }
-            if (processorRef.current) {
-                processorRef.current.disconnect()
+            if (peerConnectionRef.current) {
+                peerConnectionRef.current.close()
             }
-            if (sourceRef.current) {
-                sourceRef.current.disconnect()
-            }
-            if (streamRef.current) {
-                streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-            }
-            if (audioContextRef.current) {
-                audioContextRef.current.close()
+            if (audioElementRef.current) {
+                audioElementRef.current.srcObject = null
             }
         }
     }, [])
 
-    // Convert Float32 audio to PCM16
-    const floatTo16BitPCM = (float32Array: Float32Array): ArrayBuffer => {
-        const pcm16 = new Int16Array(float32Array.length)
-        for (let i = 0; i < float32Array.length; i++) {
-            const s = Math.max(-1, Math.min(1, float32Array[i]))
-            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
-        }
-        return pcm16.buffer
-    }
+
 
     const startVoiceControl = async () => {
         try {
             setError("")
             setConnectionStatus("connecting")
 
-            // Step 1: Get JWT token from Vercel
+            // Step 1: Get ephemeral token from Vercel
             const tokenResponse = await fetch(VERCEL_TOKEN_URL)
             if (!tokenResponse.ok) {
                 throw new Error("Failed to get authentication token")
             }
-            const { token } = await tokenResponse.json()
+            const data = await tokenResponse.json()
+            const ephemeralKey = data.value
 
-            // Step 2: Connect to WebSocket bridge on Render
-            const ws = new WebSocket(RENDER_WS_URL)
-            wsRef.current = ws
+            // Step 2: Create WebRTC peer connection
+            const pc = new RTCPeerConnection()
+            peerConnectionRef.current = pc
 
-            ws.onopen = () => {
-                console.log("WebSocket connected, authenticating...")
-                // Send authentication
-                ws.send(JSON.stringify({ type: "auth", token }))
+            // Set up audio element to play remote audio from the model
+            const audioEl = document.createElement("audio")
+            audioEl.autoplay = true
+            audioElementRef.current = audioEl
+            pc.ontrack = (e) => {
+                console.log("Received audio track from OpenAI")
+                audioEl.srcObject = e.streams[0]
             }
 
-            ws.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data)
-                    console.log("Received:", message.type, message)
-
-                    if (message.type === "connected") {
-                        setConnectionStatus("connected")
-                        setIsListening(true)
-                        // Start capturing audio
-                        startAudioCapture(ws)
-                    } else if (message.type === "disconnected") {
-                        console.error("OpenAI disconnected:", message.message)
-                        setError(`OpenAI disconnected: ${message.message || "Unknown reason"}`)
-                        setConnectionStatus("error")
-                        stopVoiceControl()
-                    } else if (message.type === "conversation.item.input_audio_transcription.completed") {
-                        // Handle transcription (GA API)
-                        const transcript = message.transcript.toLowerCase()
-                        console.log("Transcript received:", transcript)
-                        processTranscript(transcript)
-                    } else if (message.type === "input_audio_transcription.completed") {
-                        // Alternative transcription event format
-                        const transcript = (message.transcript || "").toLowerCase()
-                        console.log("Transcript (alt format):", transcript)
-                        processTranscript(transcript)
-                    } else if (message.type === "error") {
-                        console.error("Error from server:", message.message)
-                        setError(message.message)
-                        setConnectionStatus("error")
-                    } else if (message.type === "session.updated") {
-                        console.log("Session configured:", message.session)
-                    }
-                } catch (err) {
-                    // Binary data or non-JSON, ignore
-                }
-            }
-
-            ws.onerror = (error) => {
-                console.error("WebSocket error:", error)
-                setError("Connection error")
-                setConnectionStatus("error")
-            }
-
-            ws.onclose = () => {
-                console.log("WebSocket closed")
-                setConnectionStatus("disconnected")
-                setIsListening(false)
-            }
-        } catch (err: any) {
-            console.error("Error starting voice control:", err)
-            setError(err?.message || "Failed to start voice control")
-            setConnectionStatus("error")
-        }
-    }
-
-    const startAudioCapture = async (ws: WebSocket) => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            // Add local audio track for microphone input
+            const stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     channelCount: 1,
                     sampleRate: 24000,
@@ -161,36 +92,90 @@ export default function TeleprompterRealtime(props: Props) {
                     noiseSuppression: true,
                 }
             })
-            streamRef.current = stream
+            pc.addTrack(stream.getTracks()[0])
 
-            // Create audio context at 24kHz to match OpenAI requirements
-            const audioContext = new AudioContext({ sampleRate: 24000 })
-            audioContextRef.current = audioContext
+            // Set up data channel for sending and receiving events
+            const dc = pc.createDataChannel("oai-events")
+            dataChannelRef.current = dc
 
-            const source = audioContext.createMediaStreamSource(stream)
-            sourceRef.current = source
+            dc.onopen = () => {
+                console.log("Data channel opened")
+                setConnectionStatus("connected")
+                setIsListening(true)
+            }
 
-            // Use ScriptProcessorNode for direct PCM access (deprecated but widely supported)
-            // Buffer size: 4096 samples = ~170ms at 24kHz (good balance of latency and efficiency)
-            const processor = audioContext.createScriptProcessor(4096, 1, 1)
-            processorRef.current = processor
+            dc.onmessage = (e) => {
+                try {
+                    const event = JSON.parse(e.data)
+                    console.log("Received event:", event.type)
 
-            processor.onaudioprocess = (e) => {
-                if (ws.readyState === WebSocket.OPEN) {
-                    const inputData = e.inputBuffer.getChannelData(0)
-                    const pcm16 = floatTo16BitPCM(inputData)
-                    ws.send(pcm16)
+                    if (event.type === "conversation.item.input_audio_transcription.completed") {
+                        const transcript = event.transcript.toLowerCase()
+                        console.log("Transcript:", transcript)
+                        processTranscript(transcript)
+                    } else if (event.type === "input_audio_transcription.completed") {
+                        const transcript = (event.transcript || "").toLowerCase()
+                        console.log("Transcript:", transcript)
+                        processTranscript(transcript)
+                    } else if (event.type === "error") {
+                        console.error("Error:", event.error)
+                        setError(event.error.message || "Connection error")
+                        setConnectionStatus("error")
+                    } else if (event.type === "session.updated") {
+                        console.log("Session configured")
+                    }
+                } catch (err) {
+                    console.error("Error parsing event:", err)
                 }
             }
 
-            // Connect: source -> processor -> destination (required for processing)
-            source.connect(processor)
-            processor.connect(audioContext.destination)
-        } catch (err) {
-            console.error("Error capturing audio:", err)
-            setError("Microphone access denied")
+            dc.onerror = (error) => {
+                console.error("Data channel error:", error)
+                setError("Connection error")
+                setConnectionStatus("error")
+            }
+
+            dc.onclose = () => {
+                console.log("Data channel closed")
+                setConnectionStatus("disconnected")
+                setIsListening(false)
+            }
+
+            // Start the session using SDP
+            const offer = await pc.createOffer()
+            await pc.setLocalDescription(offer)
+
+            console.log("Connecting to OpenAI Realtime API via WebRTC...")
+            const sdpResponse = await fetch("https://api.openai.com/v1/realtime/calls", {
+                method: "POST",
+                body: offer.sdp,
+                headers: {
+                    Authorization: `Bearer ${ephemeralKey}`,
+                    "Content-Type": "application/sdp",
+                },
+            })
+
+            if (!sdpResponse.ok) {
+                throw new Error(`Failed to connect: ${sdpResponse.status}`)
+            }
+
+            const answerSdp = await sdpResponse.text()
+            const answer = {
+                type: "answer" as RTCSdpType,
+                sdp: answerSdp,
+            }
+            await pc.setRemoteDescription(answer)
+
+            console.log("WebRTC connection established")
+
+        } catch (err: any) {
+            console.error("Error starting voice control:", err)
+            setError(err?.message || "Failed to start voice control")
+            setConnectionStatus("error")
         }
     }
+
+
 
     const processTranscript = (transcript: string) => {
         const spokenWords = transcript.split(/\s+/)
@@ -225,24 +210,17 @@ export default function TeleprompterRealtime(props: Props) {
     }
 
     const stopVoiceControl = () => {
-        if (wsRef.current) {
-            wsRef.current.close()
+        if (dataChannelRef.current) {
+            dataChannelRef.current.close()
+            dataChannelRef.current = null
         }
-        if (processorRef.current) {
-            processorRef.current.disconnect()
-            processorRef.current = null
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close()
+            peerConnectionRef.current = null
         }
-        if (sourceRef.current) {
-            sourceRef.current.disconnect()
-            sourceRef.current = null
-        }
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-            streamRef.current = null
-        }
-        if (audioContextRef.current) {
-            audioContextRef.current.close()
-            audioContextRef.current = null
+        if (audioElementRef.current) {
+            audioElementRef.current.srcObject = null
+            audioElementRef.current = null
         }
         setIsListening(false)
         setConnectionStatus("disconnected")

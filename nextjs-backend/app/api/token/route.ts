@@ -1,49 +1,76 @@
 import { NextRequest, NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
 
 export async function GET(request: NextRequest) {
   try {
-    const secret = process.env.REALTIME_JWT_SECRET;
+    const apiKey = process.env.OPENAI_API_KEY;
 
-    if (!secret) {
-      console.error("REALTIME_JWT_SECRET is not configured");
+    if (!apiKey) {
+      console.error("OPENAI_API_KEY is not configured");
       return NextResponse.json(
         { error: "Server configuration error" },
         { status: 500 }
       );
     }
 
-    // Optional: Add rate limiting or user authentication here
-    // For now, we'll generate a token for any request
-
-    // Generate a short-lived JWT (5 minutes)
-    const token = jwt.sign(
-      {
-        iat: Math.floor(Date.now() / 1000),
-        // You can add additional claims here like userId if you have auth
-      },
-      secret,
-      {
-        algorithm: "HS256",
-        expiresIn: "5m", // 5 minutes
-      }
-    );
-
-    return NextResponse.json(
-      {
-        token,
-        expiresIn: 300, // 5 minutes in seconds
-      },
-      {
-        headers: {
-          "Cache-Control": "no-store",
+    // Session configuration for OpenAI Realtime API
+    const sessionConfig = {
+      session: {
+        type: "realtime",
+        model: "gpt-realtime",
+        modalities: ["text", "audio"],
+        instructions:
+          "You are a transcription assistant. Transcribe speech accurately.",
+        audio: {
+          input: { format: "pcm16", sample_rate: 24000 },
+          output: { voice: "alloy", format: "pcm16", sample_rate: 24000 },
         },
+        input_audio_transcription: {
+          enabled: true,
+          model: "whisper-1",
+        },
+        turn_detection: {
+          enabled: true,
+          type: "server_vad",
+          threshold: 0.5,
+          silence_duration_ms: 500,
+          prefix_padding_ms: 300,
+        },
+      },
+    };
+
+    // Request ephemeral key from OpenAI
+    const response = await fetch(
+      "https://api.openai.com/v1/realtime/client_secrets",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(sessionConfig),
       }
     );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("OpenAI API error:", response.status, errorText);
+      return NextResponse.json(
+        { error: "Failed to generate ephemeral key" },
+        { status: response.status }
+      );
+    }
+
+    const data = await response.json();
+
+    return NextResponse.json(data, {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    });
   } catch (error) {
-    console.error("Error generating token:", error);
+    console.error("Error generating ephemeral key:", error);
     return NextResponse.json(
-      { error: "Failed to generate token" },
+      { error: "Failed to generate ephemeral key" },
       { status: 500 }
     );
   }
