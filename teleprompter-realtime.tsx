@@ -1,0 +1,407 @@
+import * as React from "react"
+import { addPropertyControls, ControlType } from "framer"
+
+interface Props {
+    script: string
+    fontSize: number
+    scrollSpeed: number
+    backgroundColor: string
+    textColor: string
+    enableVoiceControl: boolean
+    highlightColor: string
+    width: number
+    height: number
+}
+
+export default function TeleprompterRealtime(props: Props) {
+    const {
+        script = "Welcome to the teleprompter. Start speaking to scroll through your script automatically.",
+        fontSize = 32,
+        scrollSpeed = 2,
+        backgroundColor = "#000000",
+        textColor = "#FFFFFF",
+        enableVoiceControl = true,
+        highlightColor = "#FFD700",
+        width,
+        height,
+    } = props
+
+    const [isListening, setIsListening] = React.useState(false)
+    const [currentWordIndex, setCurrentWordIndex] = React.useState(0)
+    const [scrollPosition, setScrollPosition] = React.useState(0)
+    const [error, setError] = React.useState<string>("")
+    const [connectionStatus, setConnectionStatus] = React.useState<string>("disconnected")
+
+    const scriptRef = React.useRef<HTMLDivElement>(null)
+    const wsRef = React.useRef<WebSocket | null>(null)
+    const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
+    const audioContextRef = React.useRef<AudioContext | null>(null)
+    const words = React.useMemo(() => script.split(/\s+/), [script])
+
+    const VERCEL_TOKEN_URL = "https://speed-sermon-rttp.vercel.app/api/token"
+    const RENDER_WS_URL = "wss://teleprompter-ws-bridge.onrender.com"
+
+    // Cleanup on unmount
+    React.useEffect(() => {
+        return () => {
+            if (wsRef.current) {
+                wsRef.current.close()
+            }
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+                mediaRecorderRef.current.stop()
+            }
+            if (audioContextRef.current) {
+                audioContextRef.current.close()
+            }
+        }
+    }, [])
+
+    // Convert audio blob to PCM16
+    const convertToPCM16 = async (audioBlob: Blob): Promise<ArrayBuffer> => {
+        const arrayBuffer = await audioBlob.arrayBuffer()
+        const audioContext = audioContextRef.current || new AudioContext({ sampleRate: 24000 })
+        audioContextRef.current = audioContext
+
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer)
+        const pcm16 = new Int16Array(audioBuffer.length)
+        const channelData = audioBuffer.getChannelData(0)
+
+        for (let i = 0; i < channelData.length; i++) {
+            const s = Math.max(-1, Math.min(1, channelData[i]))
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff
+        }
+
+        return pcm16.buffer
+    }
+
+    const startVoiceControl = async () => {
+        try {
+            setError("")
+            setConnectionStatus("connecting")
+
+            // Step 1: Get JWT token from Vercel
+            const tokenResponse = await fetch(VERCEL_TOKEN_URL)
+            if (!tokenResponse.ok) {
+                throw new Error("Failed to get authentication token")
+            }
+            const { token } = await tokenResponse.json()
+
+            // Step 2: Connect to WebSocket bridge on Render
+            const ws = new WebSocket(RENDER_WS_URL)
+            wsRef.current = ws
+
+            ws.onopen = () => {
+                console.log("WebSocket connected, authenticating...")
+                // Send authentication
+                ws.send(JSON.stringify({ type: "auth", token }))
+            }
+
+            ws.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data)
+                    console.log("Received:", message.type)
+
+                    if (message.type === "connected") {
+                        setConnectionStatus("connected")
+                        setIsListening(true)
+                        // Start capturing audio
+                        startAudioCapture(ws)
+                    } else if (message.type === "conversation.item.input_audio_transcription.completed") {
+                        // Handle transcription
+                        const transcript = message.transcript.toLowerCase()
+                        processTranscript(transcript)
+                    } else if (message.type === "error") {
+                        setError(message.message)
+                        setConnectionStatus("error")
+                    }
+                } catch (err) {
+                    // Binary data or non-JSON, ignore
+                }
+            }
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error)
+                setError("Connection error")
+                setConnectionStatus("error")
+            }
+
+            ws.onclose = () => {
+                console.log("WebSocket closed")
+                setConnectionStatus("disconnected")
+                setIsListening(false)
+            }
+        } catch (err) {
+            console.error("Error starting voice control:", err)
+            setError(err.message || "Failed to start voice control")
+            setConnectionStatus("error")
+        }
+    }
+
+    const startAudioCapture = async (ws: WebSocket) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    channelCount: 1,
+                    sampleRate: 24000,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                }
+            })
+
+            const mediaRecorder = new MediaRecorder(stream, {
+                mimeType: 'audio/webm',
+            })
+            mediaRecorderRef.current = mediaRecorder
+
+            mediaRecorder.ondataavailable = async (event) => {
+                if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                    try {
+                        // Convert to PCM16 and send
+                        const pcm16 = await convertToPCM16(event.data)
+                        ws.send(pcm16)
+                    } catch (err) {
+                        console.error("Error converting audio:", err)
+                    }
+                }
+            }
+
+            // Capture audio in chunks
+            mediaRecorder.start(100)
+        } catch (err) {
+            console.error("Error capturing audio:", err)
+            setError("Microphone access denied")
+        }
+    }
+
+    const processTranscript = (transcript: string) => {
+        const spokenWords = transcript.split(/\s+/)
+        let matchIndex = currentWordIndex
+
+        for (let i = 0; i < spokenWords.length; i++) {
+            const spokenWord = spokenWords[i].replace(/[^\w]/g, "")
+            
+            // Look ahead in the script for matching words
+            for (let j = matchIndex; j < words.length; j++) {
+                const scriptWord = words[j].toLowerCase().replace(/[^\w]/g, "")
+                
+                if (scriptWord.includes(spokenWord) || spokenWord.includes(scriptWord)) {
+                    matchIndex = j + 1
+                    setCurrentWordIndex(matchIndex)
+                    
+                    // Auto-scroll based on word position
+                    if (scriptRef.current) {
+                        const wordElement = scriptRef.current.children[j] as HTMLElement
+                        if (wordElement) {
+                            const containerHeight = scriptRef.current.clientHeight
+                            const wordTop = wordElement.offsetTop
+                            const targetScroll = Math.max(0, wordTop - containerHeight / 3)
+                            setScrollPosition(targetScroll)
+                        }
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    const stopVoiceControl = () => {
+        if (wsRef.current) {
+            wsRef.current.close()
+        }
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+            mediaRecorderRef.current.stop()
+        }
+        setIsListening(false)
+        setConnectionStatus("disconnected")
+    }
+
+    const resetTeleprompter = () => {
+        setCurrentWordIndex(0)
+        setScrollPosition(0)
+        if (isListening) {
+            stopVoiceControl()
+        }
+    }
+
+    // Auto-scroll effect
+    React.useEffect(() => {
+        if (scriptRef.current) {
+            scriptRef.current.scrollTop = scrollPosition
+        }
+    }, [scrollPosition])
+
+    // Manual scroll when voice control is off
+    React.useEffect(() => {
+        if (!enableVoiceControl || !isListening) {
+            const interval = setInterval(() => {
+                setScrollPosition((prev) => prev + scrollSpeed)
+            }, 50)
+            return () => clearInterval(interval)
+        }
+    }, [enableVoiceControl, isListening, scrollSpeed])
+
+    return (
+        <div
+            style={{
+                width: "100%",
+                height: "100%",
+                backgroundColor,
+                position: "relative",
+                overflow: "hidden",
+            }}
+        >
+            {/* Script Display */}
+            <div
+                ref={scriptRef}
+                style={{
+                    width: "100%",
+                    height: "calc(100% - 100px)",
+                    overflowY: "auto",
+                    padding: "40px",
+                    scrollBehavior: "smooth",
+                }}
+            >
+                <div style={{ fontSize, color: textColor, lineHeight: 1.6 }}>
+                    {words.map((word, index) => (
+                        <span
+                            key={index}
+                            style={{
+                                backgroundColor:
+                                    index < currentWordIndex
+                                        ? highlightColor
+                                        : "transparent",
+                                padding: "2px 4px",
+                                marginRight: "8px",
+                                transition: "background-color 0.3s",
+                            }}
+                        >
+                            {word}
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            {/* Controls */}
+            <div
+                style={{
+                    position: "absolute",
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: "100px",
+                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "20px",
+                    padding: "20px",
+                }}
+            >
+                {enableVoiceControl && (
+                    <button
+                        onClick={isListening ? stopVoiceControl : startVoiceControl}
+                        disabled={connectionStatus === "connecting"}
+                        style={{
+                            padding: "12px 24px",
+                            fontSize: "16px",
+                            borderRadius: "8px",
+                            border: "none",
+                            backgroundColor: isListening ? "#ff4444" : "#4CAF50",
+                            color: "white",
+                            cursor: connectionStatus === "connecting" ? "wait" : "pointer",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        {connectionStatus === "connecting" ? "Connecting..." :
+                         isListening ? "Stop Voice Control" : "Start Voice Control"}
+                    </button>
+                )}
+
+                <button
+                    onClick={resetTeleprompter}
+                    style={{
+                        padding: "12px 24px",
+                        fontSize: "16px",
+                        borderRadius: "8px",
+                        border: "none",
+                        backgroundColor: "#2196F3",
+                        color: "white",
+                        cursor: "pointer",
+                        fontWeight: "bold",
+                    }}
+                >
+                    Reset
+                </button>
+
+                {/* Status Indicator */}
+                <div style={{ color: "white", fontSize: "14px" }}>
+                    Status: {connectionStatus}
+                    {currentWordIndex > 0 && ` | Progress: ${Math.round((currentWordIndex / words.length) * 100)}%`}
+                </div>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+                <div
+                    style={{
+                        position: "absolute",
+                        top: "20px",
+                        left: "20px",
+                        right: "20px",
+                        padding: "15px",
+                        backgroundColor: "#ff4444",
+                        color: "white",
+                        borderRadius: "8px",
+                        zIndex: 1000,
+                    }}
+                >
+                    {error}
+                </div>
+            )}
+        </div>
+    )
+}
+
+addPropertyControls(TeleprompterRealtime, {
+    script: {
+        type: ControlType.String,
+        defaultValue:
+            "Welcome to the AI-powered teleprompter. Click 'Start Voice Control' and begin speaking your script. The teleprompter will automatically scroll and highlight your progress using OpenAI's Realtime API for accurate speech recognition.",
+        displayTextArea: true,
+    },
+    fontSize: {
+        type: ControlType.Number,
+        defaultValue: 32,
+        min: 16,
+        max: 72,
+        step: 1,
+        unit: "px",
+    },
+    scrollSpeed: {
+        type: ControlType.Number,
+        defaultValue: 2,
+        min: 1,
+        max: 10,
+        step: 0.5,
+        displayStepper: true,
+        description: "Manual scroll speed when voice control is off",
+    },
+    backgroundColor: {
+        type: ControlType.Color,
+        defaultValue: "#000000",
+    },
+    textColor: {
+        type: ControlType.Color,
+        defaultValue: "#FFFFFF",
+    },
+    highlightColor: {
+        type: ControlType.Color,
+        defaultValue: "#FFD700",
+        description: "Color for spoken words",
+    },
+    enableVoiceControl: {
+        type: ControlType.Boolean,
+        defaultValue: true,
+        description: "Enable AI-powered voice recognition",
+    },
+})
