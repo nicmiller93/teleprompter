@@ -29,7 +29,7 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Speed Sermon <onboarding@resend.dev>",
+        from: "Speed Sermon <contributors@speedsermon.com>",
         to: [userEmail],
         subject: "Your Teleprompter Recording is Ready",
         html: `
