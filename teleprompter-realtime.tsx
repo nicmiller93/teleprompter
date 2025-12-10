@@ -112,14 +112,21 @@ export default function TeleprompterRealtime(props: Props) {
                         setConnectionStatus("error")
                         stopVoiceControl()
                     } else if (message.type === "conversation.item.input_audio_transcription.completed") {
-                        // Handle transcription
+                        // Handle transcription (GA API)
                         const transcript = message.transcript.toLowerCase()
-                        console.log("Transcript:", transcript)
+                        console.log("Transcript received:", transcript)
+                        processTranscript(transcript)
+                    } else if (message.type === "input_audio_transcription.completed") {
+                        // Alternative transcription event format
+                        const transcript = (message.transcript || "").toLowerCase()
+                        console.log("Transcript (alt format):", transcript)
                         processTranscript(transcript)
                     } else if (message.type === "error") {
                         console.error("Error from server:", message.message)
                         setError(message.message)
                         setConnectionStatus("error")
+                    } else if (message.type === "session.updated") {
+                        console.log("Session configured:", message.session)
                     }
                 } catch (err) {
                     // Binary data or non-JSON, ignore

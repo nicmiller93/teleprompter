@@ -151,19 +151,46 @@ wss.on("connection", (clientWs, req) => {
     try {
       console.log(`[${connId}] Connecting to OpenAI Realtime API...`);
 
-      // OpenAI Realtime API WebSocket URL
-      const url =
-        "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01";
+      // OpenAI Realtime API WebSocket URL (GA)
+      const url = "wss://api.openai.com/v1/realtime?model=gpt-realtime";
 
       openaiWs = new WebSocket(url, {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "OpenAI-Beta": "realtime=v1",
         },
       });
 
       openaiWs.on("open", () => {
         console.log(`[${connId}] ✅ Connected to OpenAI Realtime API`);
+
+        // Configure session for speech-to-text (GA API)
+        openaiWs.send(
+          JSON.stringify({
+            type: "session.update",
+            session: {
+              type: "realtime",
+              model: "gpt-realtime",
+              modalities: ["text", "audio"],
+              instructions:
+                "You are a transcription assistant. Transcribe speech accurately.",
+              audio: {
+                input: { format: "pcm16", sample_rate: 24000 },
+                output: { voice: "alloy", format: "pcm16", sample_rate: 24000 },
+              },
+              input_audio_transcription: {
+                enabled: true,
+                model: "whisper-1",
+              },
+              turn_detection: {
+                enabled: true,
+                type: "server_vad",
+                threshold: 0.5,
+                silence_duration_ms: 500,
+                prefix_padding_ms: 300,
+              },
+            },
+          })
+        );
 
         // Notify client of successful connection
         clientSocket.send(
