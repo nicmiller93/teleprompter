@@ -649,7 +649,7 @@ export default function TeleprompterRealtime(props: Props) {
                     height: "calc(100% - 100px)",
                     overflowY: "auto",
                     overflowX: "hidden",
-                    padding: "40px",
+                    padding: width < 768 ? "20px" : "40px",
                     scrollBehavior: "smooth",
                     display: "flex",
                     justifyContent: "center",
@@ -658,7 +658,7 @@ export default function TeleprompterRealtime(props: Props) {
                 }}
             >
                 <div style={{ 
-                    fontSize, 
+                    fontSize: width < 768 ? Math.max(fontSize * 0.75, 20) : fontSize, 
                     color: textColor, 
                     lineHeight: 1.8,
                     wordWrap: "break-word",
@@ -708,9 +708,9 @@ export default function TeleprompterRealtime(props: Props) {
                     bottom: 0,
                     left: 0,
                     right: 0,
-                    height: "100px",
+                    height: width < 768 ? "80px" : "100px",
                     backgroundColor: "rgba(0, 0, 0, 0.8)",
-                    padding: "20px",
+                    padding: width < 768 ? "12px" : "20px",
                     zIndex: 3,
                 }}
             >
@@ -724,8 +724,8 @@ export default function TeleprompterRealtime(props: Props) {
                             left: "50%",
                             top: "50%",
                             transform: "translate(-50%, -50%)",
-                            padding: "12px 24px",
-                            fontSize: "16px",
+                            padding: width < 768 ? "10px 18px" : "12px 24px",
+                            fontSize: width < 768 ? "14px" : "16px",
                             borderRadius: "8px",
                             border: "none",
                             backgroundColor: isRecording ? "#ff4444" : isPreparingRecording ? "#666" : "#e91e63",
@@ -735,6 +735,8 @@ export default function TeleprompterRealtime(props: Props) {
                             display: "flex",
                             alignItems: "center",
                             gap: "8px",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
                         }}
                     >
                         {isRecording && <div style={{
@@ -755,14 +757,16 @@ export default function TeleprompterRealtime(props: Props) {
                             left: "50%",
                             top: "50%",
                             transform: "translate(-50%, -50%)",
-                            padding: "12px 24px",
-                            fontSize: "16px",
+                            padding: width < 768 ? "10px 18px" : "12px 24px",
+                            fontSize: width < 768 ? "14px" : "16px",
                             borderRadius: "8px",
                             border: "none",
                             backgroundColor: isListening ? "#ff4444" : "#4CAF50",
                             color: "white",
                             cursor: connectionStatus === "connecting" ? "wait" : "pointer",
                             fontWeight: "bold",
+                            touchAction: "manipulation",
+                            WebkitTapHighlightColor: "transparent",
                         }}
                     >
                         {connectionStatus === "connecting" ? "Connecting..." :
@@ -773,12 +777,13 @@ export default function TeleprompterRealtime(props: Props) {
                 {/* Right-aligned Status Indicator */}
                 <div style={{ 
                     position: "absolute",
-                    right: "20px",
+                    right: width < 768 ? "10px" : "20px",
                     top: "50%",
                     transform: "translateY(-50%)",
                     color: "white", 
-                    fontSize: "14px",
-                    textAlign: "right"
+                    fontSize: width < 768 ? "12px" : "14px",
+                    textAlign: "right",
+                    display: width < 480 ? "none" : "block",
                 }}>
                     {isRecording ? "🔴 Recording" : connectionStatus}
                     {currentWordIndex > 0 && ` | Progress: ${Math.round((currentWordIndex / words.length) * 100)}%`}
@@ -804,14 +809,16 @@ export default function TeleprompterRealtime(props: Props) {
                     <div
                         style={{
                             backgroundColor: "#1a1a1a",
-                            padding: "40px",
+                            padding: width < 768 ? "24px" : "40px",
                             borderRadius: "12px",
                             maxWidth: "600px",
                             width: "90%",
                             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+                            maxHeight: "90vh",
+                            overflowY: "auto",
                         }}
                     >
-                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", textAlign: "center" }}>
+                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", textAlign: "center", fontSize: width < 768 ? "20px" : "24px" }}>
                             Recording Complete
                         </h2>
                         
@@ -832,15 +839,15 @@ export default function TeleprompterRealtime(props: Props) {
                             </div>
                         )}
                         
-                        <p style={{ color: "#ccc", marginBottom: "30px", textAlign: "center" }}>
+                        <p style={{ color: "#ccc", marginBottom: "30px", textAlign: "center", fontSize: width < 768 ? "14px" : "16px" }}>
                             Review your recording above. Keep it or try again?
                         </p>
-                        <div style={{ display: "flex", gap: "12px" }}>
+                        <div style={{ display: "flex", flexDirection: width < 768 ? "column" : "row", gap: "12px" }}>
                             <button
                                 onClick={handleRetry}
                                 style={{
                                     flex: 1,
-                                    padding: "12px 24px",
+                                    padding: width < 768 ? "14px 24px" : "12px 24px",
                                     fontSize: "16px",
                                     borderRadius: "8px",
                                     border: "none",
@@ -848,6 +855,9 @@ export default function TeleprompterRealtime(props: Props) {
                                     color: "white",
                                     cursor: "pointer",
                                     fontWeight: "bold",
+                                    touchAction: "manipulation",
+                                    WebkitTapHighlightColor: "transparent",
+                                    minHeight: "44px",
                                 }}
                             >
                                 Try Again
@@ -856,7 +866,7 @@ export default function TeleprompterRealtime(props: Props) {
                                 onClick={handleKeepRecording}
                                 style={{
                                     flex: 1,
-                                    padding: "12px 24px",
+                                    padding: width < 768 ? "14px 24px" : "12px 24px",
                                     fontSize: "16px",
                                     borderRadius: "8px",
                                     border: "none",
@@ -864,6 +874,9 @@ export default function TeleprompterRealtime(props: Props) {
                                     color: "white",
                                     cursor: "pointer",
                                     fontWeight: "bold",
+                                    touchAction: "manipulation",
+                                    WebkitTapHighlightColor: "transparent",
+                                    minHeight: "44px",
                                 }}
                             >
                                 Save Recording
@@ -892,7 +905,7 @@ export default function TeleprompterRealtime(props: Props) {
                     <div
                         style={{
                             backgroundColor: "#1a1a1a",
-                            padding: "40px",
+                            padding: width < 768 ? "24px" : "40px",
                             borderRadius: "12px",
                             maxWidth: "500px",
                             width: "90%",
@@ -907,8 +920,8 @@ export default function TeleprompterRealtime(props: Props) {
                                 position: "absolute",
                                 top: "12px",
                                 right: "12px",
-                                width: "32px",
-                                height: "32px",
+                                width: width < 768 ? "36px" : "32px",
+                                height: width < 768 ? "36px" : "32px",
                                 borderRadius: "50%",
                                 border: "none",
                                 backgroundColor: "rgba(255, 255, 255, 0.1)",
@@ -932,10 +945,10 @@ export default function TeleprompterRealtime(props: Props) {
                             ×
                         </button>
                         
-                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", textAlign: "center" }}>
+                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", textAlign: "center", fontSize: width < 768 ? "20px" : "24px" }}>
                           Ready to record?
                         </h2>
-                        <p style={{ color: "#ccc", marginBottom: "30px", textAlign: "center" }}>
+                        <p style={{ color: "#ccc", marginBottom: "30px", textAlign: "center", fontSize: width < 768 ? "14px" : "16px" }}>
                             Your camera will appear as a blurred background behind the teleprompter. Recording starts after a 3-second countdown.
                         </p>
                         <button
@@ -961,7 +974,7 @@ export default function TeleprompterRealtime(props: Props) {
                             }}
                             style={{
                                 width: "100%",
-                                padding: "12px 24px",
+                                padding: width < 768 ? "14px 24px" : "12px 24px",
                                 fontSize: "16px",
                                 borderRadius: "8px",
                                 border: "none",
@@ -969,6 +982,9 @@ export default function TeleprompterRealtime(props: Props) {
                                 color: "white",
                                 cursor: "pointer",
                                 fontWeight: "bold",
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                                minHeight: "44px",
                             }}
                         >
                             Start Recording
@@ -994,7 +1010,7 @@ export default function TeleprompterRealtime(props: Props) {
                     }}
                 >
                     <div style={{
-                        fontSize: "120px",
+                        fontSize: width < 768 ? "80px" : "120px",
                         fontWeight: "bold",
                         color: "white",
                         animation: "pulse 1s ease-in-out"
@@ -1042,25 +1058,27 @@ export default function TeleprompterRealtime(props: Props) {
                     <div
                         style={{
                             backgroundColor: "#1a1a1a",
-                            padding: "40px",
+                            padding: width < 768 ? "24px" : "40px",
                             borderRadius: "12px",
                             maxWidth: "500px",
                             width: "90%",
                             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+                            maxHeight: "90vh",
+                            overflowY: "auto",
                         }}
                     >
                         {uploadStatus === "success" ? (
                             <>
-                                <h2 style={{ color: "#4CAF50", marginTop: 0, marginBottom: "20px" }}>
+                                <h2 style={{ color: "#4CAF50", marginTop: 0, marginBottom: "20px", fontSize: width < 768 ? "20px" : "24px" }}>
                                     ✓ Upload Successful!
                                 </h2>
-                                <p style={{ color: "white", marginBottom: "20px" }}>
+                                <p style={{ color: "white", marginBottom: "20px", fontSize: width < 768 ? "14px" : "16px" }}>
                                     Your video has been uploaded successfully.
                                 </p>
                                 <button
                                     onClick={handleCancelSubmission}
                                     style={{
-                                        padding: "12px 24px",
+                                        padding: width < 768 ? "14px 24px" : "12px 24px",
                                         fontSize: "16px",
                                         borderRadius: "8px",
                                         border: "none",
@@ -1069,6 +1087,9 @@ export default function TeleprompterRealtime(props: Props) {
                                         cursor: "pointer",
                                         fontWeight: "bold",
                                         width: "100%",
+                                        touchAction: "manipulation",
+                                        WebkitTapHighlightColor: "transparent",
+                                        minHeight: "44px",
                                     }}
                                 >
                                     Done
@@ -1076,12 +1097,12 @@ export default function TeleprompterRealtime(props: Props) {
                             </>
                         ) : (
                             <>
-                                <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px" }}>
+                                <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", fontSize: width < 768 ? "20px" : "24px" }}>
                                     Submit Your Recording
                                 </h2>
                                 
                                 <div style={{ marginBottom: "20px" }}>
-                                    <label style={{ color: "white", display: "block", marginBottom: "8px" }}>
+                                    <label style={{ color: "white", display: "block", marginBottom: "8px", fontSize: width < 768 ? "14px" : "16px" }}>
                                         Name *
                                     </label>
                                     <input
@@ -1091,7 +1112,7 @@ export default function TeleprompterRealtime(props: Props) {
                                         disabled={uploadStatus === "uploading"}
                                         style={{
                                             width: "100%",
-                                            padding: "12px",
+                                            padding: width < 768 ? "14px" : "12px",
                                             fontSize: "16px",
                                             borderRadius: "8px",
                                             border: "1px solid #444",
@@ -1104,7 +1125,7 @@ export default function TeleprompterRealtime(props: Props) {
                                 </div>
 
                                 <div style={{ marginBottom: "20px" }}>
-                                    <label style={{ color: "white", display: "block", marginBottom: "8px" }}>
+                                    <label style={{ color: "white", display: "block", marginBottom: "8px", fontSize: width < 768 ? "14px" : "16px" }}>
                                         Email *
                                     </label>
                                     <input
@@ -1114,7 +1135,7 @@ export default function TeleprompterRealtime(props: Props) {
                                         disabled={uploadStatus === "uploading"}
                                         style={{
                                             width: "100%",
-                                            padding: "12px",
+                                            padding: width < 768 ? "14px" : "12px",
                                             fontSize: "16px",
                                             borderRadius: "8px",
                                             border: "1px solid #444",
@@ -1148,13 +1169,13 @@ export default function TeleprompterRealtime(props: Props) {
                                     </div>
                                 )}
 
-                                <div style={{ display: "flex", gap: "12px" }}>
+                                <div style={{ display: "flex", flexDirection: width < 768 ? "column" : "row", gap: "12px" }}>
                                     <button
                                         onClick={handleCancelSubmission}
                                         disabled={uploadStatus === "uploading"}
                                         style={{
                                             flex: 1,
-                                            padding: "12px 24px",
+                                            padding: width < 768 ? "14px 24px" : "12px 24px",
                                             fontSize: "16px",
                                             borderRadius: "8px",
                                             border: "none",
@@ -1163,6 +1184,9 @@ export default function TeleprompterRealtime(props: Props) {
                                             cursor: uploadStatus === "uploading" ? "not-allowed" : "pointer",
                                             fontWeight: "bold",
                                             opacity: uploadStatus === "uploading" ? 0.5 : 1,
+                                            touchAction: "manipulation",
+                                            WebkitTapHighlightColor: "transparent",
+                                            minHeight: "44px",
                                         }}
                                     >
                                         Cancel
@@ -1172,7 +1196,7 @@ export default function TeleprompterRealtime(props: Props) {
                                         disabled={uploadStatus === "uploading" || !userName || !userEmail}
                                         style={{
                                             flex: 1,
-                                            padding: "12px 24px",
+                                            padding: width < 768 ? "14px 24px" : "12px 24px",
                                             fontSize: "16px",
                                             borderRadius: "8px",
                                             border: "none",
@@ -1181,6 +1205,9 @@ export default function TeleprompterRealtime(props: Props) {
                                             cursor: (uploadStatus === "uploading" || !userName || !userEmail) ? "not-allowed" : "pointer",
                                             fontWeight: "bold",
                                             opacity: (uploadStatus === "uploading" || !userName || !userEmail) ? 0.5 : 1,
+                                            touchAction: "manipulation",
+                                            WebkitTapHighlightColor: "transparent",
+                                            minHeight: "44px",
                                         }}
                                     >
                                         {uploadStatus === "uploading" ? "Uploading..." : "Submit"}
