@@ -52,6 +52,7 @@ export default function TeleprompterRealtime(props: Props) {
     const [videoPreviewUrl, setVideoPreviewUrl] = React.useState<string>("")
     const [recordingStartTime, setRecordingStartTime] = React.useState<number | null>(null)
     const [elapsedTime, setElapsedTime] = React.useState(0)
+    const [showWelcomeModal, setShowWelcomeModal] = React.useState(true)
 
     const scriptRef = React.useRef<HTMLDivElement>(null)
     const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null)
@@ -366,6 +367,32 @@ export default function TeleprompterRealtime(props: Props) {
                 // Don't fail the whole operation if email fails
             }
             
+            // Submit to HeyGen for avatar creation
+            try {
+                const avatarResponse = await fetch('https://speed-sermon-rttp.vercel.app/api/create-avatar', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        uploadcareFileUrl: cdnUrl,
+                        avatarName: `${userName}_avatar`,
+                        userName,
+                        userEmail
+                    })
+                })
+                
+                if (avatarResponse.ok) {
+                    const avatarResult = await avatarResponse.json()
+                    console.log('Avatar creation submitted:', avatarResult)
+                } else {
+                    console.error('Failed to submit avatar creation:', await avatarResponse.text())
+                }
+            } catch (avatarErr) {
+                console.error('Failed to submit avatar creation:', avatarErr)
+                // Don't fail the whole operation if avatar submission fails
+            }
+            
         } catch (err: any) {
             console.error("Upload error:", err)
             setError(err?.message || "Failed to upload video. Please try again.")
@@ -657,7 +684,7 @@ export default function TeleprompterRealtime(props: Props) {
                 setScrollPosition(Math.max(0, targetScroll))
             }
         }
-    }, [paragraphs]) // Re-run when script changes
+    }, [paragraphs, currentWordIndex]) // Re-run when script changes OR when currentWordIndex resets to 0
 
     // Connect video stream to video element when camera is enabled
     React.useEffect(() => {
@@ -1427,6 +1454,92 @@ export default function TeleprompterRealtime(props: Props) {
                                 </div>
                             </>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Welcome Modal */}
+            {showWelcomeModal && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        backgroundColor: "rgba(0, 0, 0, 0.95)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        zIndex: 10000,
+                    }}
+                >
+                    <div
+                        style={{
+                            backgroundColor: "#1a1a1a",
+                            padding: width < 768 ? "24px" : "40px",
+                            borderRadius: "12px",
+                            maxWidth: "600px",
+                            width: "90%",
+                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+                            maxHeight: "90vh",
+                            overflowY: "auto",
+                        }}
+                    >
+                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", fontSize: width < 768 ? "20px" : "24px", textAlign: "center" }}>
+                            Record Your Training Video
+                        </h2>
+                        
+                        <div style={{ color: "#ccc", fontSize: width < 768 ? "14px" : "16px", lineHeight: 1.6 }}>
+                            <p style={{ marginBottom: "16px" }}>
+                                Use Speed Sermon AI's built-in teleprompter recorder to film your digital twin training video.
+                            </p>
+                            
+                            <h3 style={{ color: "white", fontSize: width < 768 ? "16px" : "18px", marginTop: "24px", marginBottom: "12px" }}>
+                                How It Works:
+                            </h3>
+                            
+                            <div style={{ marginBottom: "12px" }}>
+                                <p style={{ margin: "8px 0" }}>
+                                    <strong>1. Speak naturally</strong>—the teleprompter scrolls as you talk
+                                </p>
+                                <p style={{ margin: "8px 0" }}>
+                                    <strong>2. Follow stage directions</strong> in italics (don't read them aloud)
+                                </p>
+                                <p style={{ margin: "8px 0" }}>
+                                    <strong>3. Spoken words are highlighted as you go</strong>
+                                </p>
+                            </div>
+                            
+                            <h3 style={{ color: "white", fontSize: width < 768 ? "16px" : "18px", marginTop: "24px", marginBottom: "12px" }}>
+                                After Recording:
+                            </h3>
+                            
+                            <p style={{ marginBottom: "16px" }}>
+                                Review your video, then submit it with your name and email. We'll create your digital twin and reach out if we need anything.
+                            </p>
+                        </div>
+                        
+                        <button
+                            onClick={() => setShowWelcomeModal(false)}
+                            style={{
+                                padding: width < 768 ? "14px 24px" : "12px 24px",
+                                fontSize: "16px",
+                                borderRadius: "8px",
+                                border: "none",
+                                backgroundColor: "#4CAF50",
+                                color: "white",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                width: "100%",
+                                marginTop: "20px",
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                                minHeight: "44px",
+                            }}
+                        >
+                            Let's Go
+                        </button>
                     </div>
                 </div>
             )}
