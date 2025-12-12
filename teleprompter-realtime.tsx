@@ -250,6 +250,14 @@ export default function TeleprompterRealtime(props: Props) {
             URL.revokeObjectURL(videoPreviewUrl)
             setVideoPreviewUrl("")
         }
+        
+        // Turn off camera
+        if (videoStreamRef.current) {
+            videoStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+            videoStreamRef.current = null
+        }
+        setIsCameraEnabled(false)
+        
         setShowRetryOption(false)
         setShowSubmissionModal(true)
     }
