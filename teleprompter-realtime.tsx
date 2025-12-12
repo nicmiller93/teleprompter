@@ -369,6 +369,13 @@ export default function TeleprompterRealtime(props: Props) {
             
             // Submit to HeyGen for avatar creation
             try {
+                console.log('Submitting to HeyGen with data:', {
+                    uploadcareFileUrl: cdnUrl,
+                    avatarName: `${userName}_avatar`,
+                    userName,
+                    userEmail
+                })
+                
                 const avatarResponse = await fetch('https://speed-sermon-rttp.vercel.app/api/create-avatar', {
                     method: 'POST',
                     headers: {
@@ -382,14 +389,17 @@ export default function TeleprompterRealtime(props: Props) {
                     })
                 })
                 
+                console.log('HeyGen API response status:', avatarResponse.status)
+                
                 if (avatarResponse.ok) {
                     const avatarResult = await avatarResponse.json()
-                    console.log('Avatar creation submitted:', avatarResult)
+                    console.log('✅ Avatar creation submitted successfully:', avatarResult)
                 } else {
-                    console.error('Failed to submit avatar creation:', await avatarResponse.text())
+                    const errorText = await avatarResponse.text()
+                    console.error('❌ Failed to submit avatar creation. Status:', avatarResponse.status, 'Response:', errorText)
                 }
             } catch (avatarErr) {
-                console.error('Failed to submit avatar creation:', avatarErr)
+                console.error('❌ Avatar creation request failed:', avatarErr)
                 // Don't fail the whole operation if avatar submission fails
             }
             
