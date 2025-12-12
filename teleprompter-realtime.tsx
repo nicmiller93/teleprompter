@@ -46,11 +46,10 @@ export default function TeleprompterRealtime(props: Props) {
     const [userName, setUserName] = React.useState("")
     const [userEmail, setUserEmail] = React.useState("")
     const [countdown, setCountdown] = React.useState<number | null>(null)
-    const [isPreparingRecording, setIsPreparingRecording] = React.useState(false)
     const [showRetryOption, setShowRetryOption] = React.useState(false)
     const [isCameraEnabled, setIsCameraEnabled] = React.useState(false)
-    const [showCameraPrompt, setShowCameraPrompt] = React.useState(false)
-    const [videoPreviewUrl, setVideoPreviewUrl] = React.useState<string>("")    
+    const [showRecordingPrep, setShowRecordingPrep] = React.useState(false)
+    const [videoPreviewUrl, setVideoPreviewUrl] = React.useState<string>("")
 
     const scriptRef = React.useRef<HTMLDivElement>(null)
     const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null)
@@ -106,48 +105,53 @@ export default function TeleprompterRealtime(props: Props) {
         }
     }, [])
 
-    // Toggle camera preview
-    const toggleCamera = async () => {
-        if (isCameraEnabled) {
-            // Disable camera
-            if (videoStreamRef.current) {
-                videoStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-                videoStreamRef.current = null
-            }
-            setIsCameraEnabled(false)
-        } else {
-            // Enable camera
-            try {
-                setError("")
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        frameRate: { ideal: 30 }
-                    },
-                    audio: true
-                })
-                
-                videoStreamRef.current = stream
-                setIsCameraEnabled(true)
-            } catch (err: any) {
-                console.error("Error enabling camera:", err)
-                setError(err?.message || "Failed to access camera. Please allow camera and microphone access.")
-            }
-        }
-    }
-
-    // Unified recording function with countdown
-    const startRecording = async () => {
-        // Check for actual stream instead of state (more reliable)
-        if (!videoStreamRef.current) {
-            setShowCameraPrompt(true)
-            return
-        }
-        
+    // Enable camera for framing
+    const enableCamera = async () => {
         try {
             setError("")
-            setIsPreparingRecording(true)
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 }
+                },
+                audio: true
+            })
+            
+            videoStreamRef.current = stream
+            setIsCameraEnabled(true)
+        } catch (err: any) {
+            console.error("Error enabling camera:", err)
+            setError(err?.message || "Failed to access camera. Please allow camera and microphone access.")
+            throw err
+        }
+    }
+    
+    // Disable camera
+    const disableCamera = () => {
+        if (videoStreamRef.current) {
+            videoStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
+            videoStreamRef.current = null
+        }
+        setIsCameraEnabled(false)
+    }
+
+    // Start recording prep modal
+    const startRecordingPrep = async () => {
+        try {
+            setError("")
+            await enableCamera()
+            setShowRecordingPrep(true)
+        } catch (err) {
+            // Error already set in enableCamera
+        }
+    }
+    
+    // Begin actual recording after framing
+    const beginRecording = async () => {
+        try {
+            setError("")
+            setShowRecordingPrep(false)
             
             // Step 1: Use existing camera stream
             const stream = videoStreamRef.current
@@ -161,7 +165,6 @@ export default function TeleprompterRealtime(props: Props) {
                 await new Promise(resolve => setTimeout(resolve, 1000))
             }
             setCountdown(null)
-            setIsPreparingRecording(false)
             
             // Step 3: Start video recording
             recordedChunksRef.current = []
@@ -181,8 +184,6 @@ export default function TeleprompterRealtime(props: Props) {
                 // Create URL for video preview
                 const url = URL.createObjectURL(blob)
                 setVideoPreviewUrl(url)
-                // Don't auto-show submission modal - wait for user decision
-                // Camera stream stays active if user enabled it manually
             }
             
             mediaRecorder.start(1000)
@@ -195,14 +196,8 @@ export default function TeleprompterRealtime(props: Props) {
         } catch (err: any) {
             console.error("Error starting recording:", err)
             setError(err?.message || "Failed to start recording. Please allow camera and microphone access.")
-            setIsPreparingRecording(false)
             setCountdown(null)
-            
-            // Clean up if camera was activated
-            if (videoStreamRef.current) {
-                videoStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-                videoStreamRef.current = null
-            }
+            disableCamera()
         }
     }
 
@@ -252,14 +247,15 @@ export default function TeleprompterRealtime(props: Props) {
         }
         
         // Turn off camera
-        if (videoStreamRef.current) {
-            videoStreamRef.current.getTracks().forEach((track: MediaStreamTrack) => track.stop())
-            videoStreamRef.current = null
-        }
-        setIsCameraEnabled(false)
+        disableCamera()
         
         setShowRetryOption(false)
         setShowSubmissionModal(true)
+    }
+    
+    const handleCancelRecordingPrep = () => {
+        disableCamera()
+        setShowRecordingPrep(false)
     }
 
     const handleSubmitVideo = async () => {
@@ -593,7 +589,7 @@ export default function TeleprompterRealtime(props: Props) {
         } else if (!isCameraEnabled && videoPreviewRef.current) {
             videoPreviewRef.current.srcObject = null
         }
-    }, [isCameraEnabled])
+    }, [isCameraEnabled, showRecordingPrep])
 
     return (
         <div
@@ -605,8 +601,8 @@ export default function TeleprompterRealtime(props: Props) {
                 overflow: width < 768 ? "visible" : "hidden",
             }}
         >
-            {/* Video Preview Background (when camera is enabled) */}
-            {isCameraEnabled && (
+            {/* Video Preview Background (when camera is enabled and recording) */}
+            {isCameraEnabled && !showRecordingPrep && (
                 <video
                     ref={videoPreviewRef}
                     autoPlay
@@ -626,8 +622,8 @@ export default function TeleprompterRealtime(props: Props) {
                 />
             )}
             
-            {/* Semi-transparent overlay when camera is enabled */}
-            {isCameraEnabled && (
+            {/* Semi-transparent overlay when camera is enabled and recording */}
+            {isCameraEnabled && !showRecordingPrep && (
                 <div
                     style={{
                         position: "absolute",
@@ -720,8 +716,7 @@ export default function TeleprompterRealtime(props: Props) {
                 {/* Centered Record Button */}
                 {enableVideoRecording && uploadcarePublicKey ? (
                     <button
-                        onClick={isRecording ? stopRecording : startRecording}
-                        disabled={isPreparingRecording}
+                        onClick={isRecording ? stopRecording : startRecordingPrep}
                         style={{
                             position: "absolute",
                             left: "50%",
@@ -731,9 +726,9 @@ export default function TeleprompterRealtime(props: Props) {
                             fontSize: width < 768 ? "14px" : "16px",
                             borderRadius: "8px",
                             border: "none",
-                            backgroundColor: isRecording ? "#ff4444" : isPreparingRecording ? "#666" : "#e91e63",
+                            backgroundColor: isRecording ? "#ff4444" : "#e91e63",
                             color: "white",
-                            cursor: isPreparingRecording ? "wait" : "pointer",
+                            cursor: "pointer",
                             fontWeight: "bold",
                             display: "flex",
                             alignItems: "center",
@@ -749,7 +744,7 @@ export default function TeleprompterRealtime(props: Props) {
                             backgroundColor: "white",
                             animation: "pulse 1.5s infinite"
                         }} />}
-                        {isPreparingRecording ? "Preparing..." : isRecording ? "Stop Recording" : "Record"}
+                        {isRecording ? "Stop Recording" : "Record"}
                     </button>
                 ) : enableVoiceControl && (
                     <button
@@ -889,99 +884,136 @@ export default function TeleprompterRealtime(props: Props) {
                 </div>
             )}
 
-            {/* Camera Enable Prompt */}
-            {showCameraPrompt && (
+            {/* Recording Preparation Modal - Full Screen */}
+            {showRecordingPrep && (
                 <div
                     style={{
-                        position: "absolute",
+                        position: "fixed",
                         top: 0,
                         left: 0,
                         right: 0,
                         bottom: 0,
-                        backgroundColor: "rgba(0, 0, 0, 0.9)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        zIndex: 1800,
+                        backgroundColor: "#000",
+                        zIndex: 99999,
                     }}
                 >
+                    {/* Full-screen video preview */}
+                    <video
+                        ref={videoPreviewRef}
+                        autoPlay
+                        muted
+                        playsInline
+                        style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            transform: "scaleX(-1)",
+                        }}
+                    />
+                    
+                    {/* Framing Grid Overlay */}
                     <div
                         style={{
-                            backgroundColor: "#1a1a1a",
-                            padding: width < 768 ? "24px" : "40px",
-                            borderRadius: "12px",
-                            maxWidth: "500px",
-                            width: "90%",
-                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
-                            position: "relative",
+                            position: "absolute",
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            pointerEvents: "none",
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr",
+                            gridTemplateRows: "1fr 1fr 1fr",
+                            gap: "0",
                         }}
                     >
-                        {/* Close X button */}
+                        {[...Array(9)].map((_, i) => (
+                            <div
+                                key={i}
+                                style={{
+                                    border: "0.5px solid rgba(255, 255, 255, 0.3)",
+                                }}
+                            />
+                        ))}
+                    </div>
+                    
+                    {/* Instructions Popup - Lower Left Corner */}
+                    <div
+                        style={{
+                            position: "absolute",
+                            bottom: width < 768 ? "100px" : "120px",
+                            left: width < 768 ? "20px" : "20px",
+                            maxWidth: width < 768 ? "calc(100% - 40px)" : "400px",
+                            backgroundColor: "rgba(0, 0, 0, 0.85)",
+                            backdropFilter: "blur(10px)",
+                            padding: width < 768 ? "16px" : "20px",
+                            borderRadius: "12px",
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+                        }}
+                    >
+                        <h3 style={{ 
+                            color: "white", 
+                            marginTop: 0, 
+                            marginBottom: "12px", 
+                            fontSize: width < 768 ? "16px" : "18px",
+                            fontWeight: "bold",
+                        }}>
+                            Ready to Record?
+                        </h3>
+                        
+                        <div style={{ marginBottom: "12px" }}>
+                            <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
+                                <strong style={{ color: "#4CAF50" }}>1.</strong> Frame your shot using the grid
+                            </div>
+                            <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
+                                <strong style={{ color: "#ff9800" }}>2.</strong> Click "Start Recording" below
+                            </div>
+                            <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
+                                <strong style={{ color: "#2196F3" }}>3.</strong> Watch the 3-2-1 countdown
+                            </div>
+                            <div style={{ color: "#ccc", fontSize: width < 768 ? "13px" : "14px" }}>
+                                <strong style={{ color: "#e91e63" }}>4.</strong> Read your script - it will scroll as you speak
+                            </div>
+                        </div>
+                        
+                        <p style={{ 
+                            color: "#999", 
+                            margin: 0, 
+                            fontSize: width < 768 ? "12px" : "13px", 
+                            fontStyle: "italic",
+                            lineHeight: 1.4,
+                        }}>
+                            Your camera will appear as a blurred background behind the teleprompter text.
+                        </p>
+                    </div>
+                    
+                    {/* Toolbar with Buttons */}
+                    <div
+                        style={{
+                            position: "fixed",
+                            bottom: 0,
+                            left: 0,
+                            right: 0,
+                            height: width < 768 ? "80px" : "100px",
+                            backgroundColor: "rgba(0, 0, 0, 0.95)",
+                            padding: width < 768 ? "12px" : "20px",
+                            zIndex: 999999,
+                            boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.3)",
+                        }}
+                    >
+                        {/* Cancel Button (Left) */}
                         <button
-                            onClick={() => setShowCameraPrompt(false)}
+                            onClick={handleCancelRecordingPrep}
                             style={{
                                 position: "absolute",
-                                top: "12px",
-                                right: "12px",
-                                width: width < 768 ? "36px" : "32px",
-                                height: width < 768 ? "36px" : "32px",
-                                borderRadius: "50%",
-                                border: "none",
-                                backgroundColor: "rgba(255, 255, 255, 0.1)",
-                                color: "#fff",
-                                fontSize: "20px",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                transition: "background-color 0.2s",
-                                padding: "0",
-                                lineHeight: "1",
-                            }}
-                            onMouseEnter={(e) => {
-                                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.2)"
-                            }}
-                            onMouseLeave={(e) => {
-                                e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.1)"
-                            }}
-                        >
-                            ×
-                        </button>
-                        
-                        <h2 style={{ color: "white", marginTop: 0, marginBottom: "20px", textAlign: "center", fontSize: width < 768 ? "20px" : "24px" }}>
-                          Ready to record?
-                        </h2>
-                        <p style={{ color: "#ccc", marginBottom: "30px", textAlign: "center", fontSize: width < 768 ? "14px" : "16px" }}>
-                            Your camera will appear as a blurred background behind the teleprompter. Recording starts after a 3-second countdown.
-                        </p>
-                        <button
-                            onClick={async () => {
-                                setShowCameraPrompt(false)
-                                try {
-                                    const stream = await navigator.mediaDevices.getUserMedia({
-                                        video: {
-                                            width: { ideal: 1920 },
-                                            height: { ideal: 1080 },
-                                            frameRate: { ideal: 30 }
-                                        },
-                                        audio: true
-                                    })
-                                    videoStreamRef.current = stream
-                                    setIsCameraEnabled(true)
-                                    // Automatically start recording after camera is enabled
-                                    await startRecording()
-                                } catch (err: any) {
-                                    console.error("Error enabling camera:", err)
-                                    setError(err?.message || "Failed to access camera. Please allow camera and microphone access.")
-                                }
-                            }}
-                            style={{
-                                width: "100%",
-                                padding: width < 768 ? "14px 24px" : "12px 24px",
-                                fontSize: "16px",
+                                left: width < 768 ? "10px" : "20px",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                padding: width < 768 ? "10px 18px" : "12px 24px",
+                                fontSize: width < 768 ? "14px" : "16px",
                                 borderRadius: "8px",
                                 border: "none",
-                                backgroundColor: "#4CAF50",
+                                backgroundColor: "#666",
                                 color: "white",
                                 cursor: "pointer",
                                 fontWeight: "bold",
@@ -990,7 +1022,34 @@ export default function TeleprompterRealtime(props: Props) {
                                 minHeight: "44px",
                             }}
                         >
-                            Start Recording
+                            Cancel
+                        </button>
+                        
+                        {/* Start Recording Button (Center) */}
+                        <button
+                            onClick={beginRecording}
+                            style={{
+                                position: "absolute",
+                                left: "50%",
+                                top: "50%",
+                                transform: "translate(-50%, -50%)",
+                                padding: width < 768 ? "10px 18px" : "12px 24px",
+                                fontSize: width < 768 ? "14px" : "16px",
+                                borderRadius: "8px",
+                                border: "none",
+                                backgroundColor: "#e91e63",
+                                color: "white",
+                                cursor: "pointer",
+                                fontWeight: "bold",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                touchAction: "manipulation",
+                                WebkitTapHighlightColor: "transparent",
+                                minHeight: "44px",
+                            }}
+                        >
+                            🔴 Start Recording
                         </button>
                     </div>
                 </div>
