@@ -29,21 +29,16 @@ export async function POST(request: Request) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Speed Sermon <contributors@mail.speedsermon.com>",
+        from: "Speed Sermon <record@mail.speedsermon.com>",
         to: [userEmail],
-        subject: "Your Teleprompter Recording is Ready",
+        subject: "We Received Your Recording",
         html: `
                     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                        <h1 style="color: #4CAF50;">Recording Uploaded Successfully!</h1>
+                        <h1 style="color: #4CAF50;">We Received Your Recording!</h1>
                         <p>Hi ${userName},</p>
-                        <p>Your teleprompter video recording has been successfully uploaded and processed.</p>
-                        <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                            <p style="margin: 0;"><strong>Recording Details:</strong></p>
-                            <p style="margin: 10px 0 0 0;">Uploaded: ${new Date().toLocaleString()}</p>
-                            <p style="margin: 10px 0 0 0;">File: ${filename}</p>
-                        </div>
-                        <p>Your video has been securely stored and is ready for review.</p>
-                        <p style="color: #666; font-size: 14px; margin-top: 30px;">Thank you for using Speed Sermon Teleprompter!</p>
+                        <p>Thank you for submitting your recording. We've received it successfully and will use it to generate your digital twin.</p>
+                        <p>Our team will review your recording and begin processing your digital twin. If we need anything additional from you, we'll reach out.</p>
+                        <p style="color: #666; font-size: 14px; margin-top: 30px;">Thank you for using Speed Sermon!</p>
                     </div>
                 `,
       }),
