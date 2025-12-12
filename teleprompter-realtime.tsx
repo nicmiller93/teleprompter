@@ -602,7 +602,7 @@ export default function TeleprompterRealtime(props: Props) {
                 height: "100%",
                 backgroundColor,
                 position: "relative",
-                overflow: "hidden",
+                overflow: width < 768 ? "visible" : "hidden",
             }}
         >
             {/* Video Preview Background (when camera is enabled) */}
@@ -646,15 +646,17 @@ export default function TeleprompterRealtime(props: Props) {
                 ref={scriptRef}
                 style={{
                     width: "100%",
-                    height: "calc(100% - 100px)",
+                    height: "100%",
                     overflowY: "auto",
                     overflowX: "hidden",
                     padding: width < 768 ? "20px" : "40px",
+                    paddingBottom: width < 768 ? "120px" : "120px",
                     scrollBehavior: "smooth",
                     display: "flex",
                     justifyContent: "center",
                     position: "relative",
                     zIndex: 2,
+                    WebkitOverflowScrolling: "touch",
                 }}
             >
                 <div style={{ 
@@ -704,14 +706,15 @@ export default function TeleprompterRealtime(props: Props) {
             {/* Controls */}
             <div
                 style={{
-                    position: "absolute",
+                    position: "fixed",
                     bottom: 0,
                     left: 0,
                     right: 0,
                     height: width < 768 ? "80px" : "100px",
-                    backgroundColor: "rgba(0, 0, 0, 0.8)",
+                    backgroundColor: "rgba(0, 0, 0, 0.95)",
                     padding: width < 768 ? "12px" : "20px",
-                    zIndex: 3,
+                    zIndex: 9999,
+                    boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.3)",
                 }}
             >
                 {/* Centered Record Button */}
