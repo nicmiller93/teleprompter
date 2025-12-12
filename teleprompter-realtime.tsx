@@ -34,7 +34,7 @@ export default function TeleprompterRealtime(props: Props) {
     const [currentWordIndex, setCurrentWordIndex] = React.useState(0)
     const [scrollPosition, setScrollPosition] = React.useState(0)
     const [error, setError] = React.useState<string>("")
-    const [connectionStatus, setConnectionStatus] = React.useState<string>("disconnected")
+    const [connectionStatus, setConnectionStatus] = React.useState<string>("Ready to Record")
     
     // Video recording state
     const [isRecording, setIsRecording] = React.useState(false)
@@ -50,6 +50,8 @@ export default function TeleprompterRealtime(props: Props) {
     const [isCameraEnabled, setIsCameraEnabled] = React.useState(false)
     const [showRecordingPrep, setShowRecordingPrep] = React.useState(false)
     const [videoPreviewUrl, setVideoPreviewUrl] = React.useState<string>("")
+    const [recordingStartTime, setRecordingStartTime] = React.useState<number | null>(null)
+    const [elapsedTime, setElapsedTime] = React.useState(0)
 
     const scriptRef = React.useRef<HTMLDivElement>(null)
     const peerConnectionRef = React.useRef<RTCPeerConnection | null>(null)
@@ -74,10 +76,30 @@ export default function TeleprompterRealtime(props: Props) {
     
     const words = React.useMemo(() => {
         // Flatten all paragraphs into a single word array for tracking
-        // Filter out stage directions (text in square brackets like "[PAUSE]")
-        return paragraphs.flatMap((para: string) => 
-            para.split(/\s+/).filter((word: string) => !word.match(/^\[.*\]$/))
-        )
+        // Filter out stage directions by tracking bracket state
+        const allWords: string[] = []
+        paragraphs.forEach((para: string) => {
+            const paraWords = para.split(/\s+/)
+            let insideBrackets = false
+            
+            paraWords.forEach((word: string) => {
+                // Check if this word starts or contains opening bracket
+                if (word.includes('[')) {
+                    insideBrackets = true
+                }
+                
+                // If not inside brackets, add to tracking array
+                if (!insideBrackets && !word.includes('[') && !word.includes(']')) {
+                    allWords.push(word)
+                }
+                
+                // Check if this word ends or contains closing bracket
+                if (word.includes(']')) {
+                    insideBrackets = false
+                }
+            })
+        })
+        return allWords
     }, [paragraphs])
     
     const normalizedWords = React.useMemo(() => 
@@ -189,6 +211,8 @@ export default function TeleprompterRealtime(props: Props) {
             mediaRecorder.start(1000)
             mediaRecorderRef.current = mediaRecorder
             setIsRecording(true)
+            setRecordingStartTime(Date.now())
+            setElapsedTime(0)
             
             // Step 4: Start voice control
             await startVoiceControl()
@@ -214,6 +238,8 @@ export default function TeleprompterRealtime(props: Props) {
         }
         
         setIsRecording(false)
+        setRecordingStartTime(null)
+        setElapsedTime(0)
         setShowRetryOption(true) // Show retry dialog first
     }
 
@@ -227,14 +253,17 @@ export default function TeleprompterRealtime(props: Props) {
         // Discard current recording
         setRecordedVideo(null)
         recordedChunksRef.current = []
-        setShowRetryOption(false)
-        
         // Reset teleprompter
         setCurrentWordIndex(0)
         setScrollPosition(0)
         lastMatchIndexRef.current = 0
         currentWordBufferRef.current = ""
         lastProcessedWordRef.current = ""
+        setRecordingStartTime(null)
+        setElapsedTime(0)
+        
+        // Close the retry modal
+        setShowRetryOption(false)
         
         // Don't auto-start recording - let user click Record button
     }
@@ -358,7 +387,7 @@ export default function TeleprompterRealtime(props: Props) {
     const startVoiceControl = async () => {
         try {
             setError("")
-            setConnectionStatus("connecting")
+            setConnectionStatus("Connecting...")
 
             // Step 1: Get ephemeral token from Vercel
             const tokenResponse = await fetch(VERCEL_TOKEN_URL)
@@ -398,7 +427,7 @@ export default function TeleprompterRealtime(props: Props) {
 
             dc.onopen = () => {
                 console.log("Data channel opened")
-                setConnectionStatus("connected")
+                setConnectionStatus("Voice Active")
                 setIsListening(true)
             }
 
@@ -434,7 +463,7 @@ export default function TeleprompterRealtime(props: Props) {
                     } else if (event.type === "error") {
                         console.error("Error:", event.error)
                         setError(event.error.message || "Connection error")
-                        setConnectionStatus("error")
+                        setConnectionStatus("Connection Error")
                     } else if (event.type === "session.updated") {
                         console.log("Session configured:", event.session)
                     }
@@ -446,12 +475,12 @@ export default function TeleprompterRealtime(props: Props) {
             dc.onerror = (error) => {
                 console.error("Data channel error:", error)
                 setError("Connection error")
-                setConnectionStatus("error")
+                setConnectionStatus("Connection Error")
             }
 
             dc.onclose = () => {
                 console.log("Data channel closed")
-                setConnectionStatus("disconnected")
+                setConnectionStatus("Ready to Record")
                 setIsListening(false)
             }
 
@@ -485,7 +514,7 @@ export default function TeleprompterRealtime(props: Props) {
         } catch (err: any) {
             console.error("Error starting voice control:", err)
             setError(err?.message || "Failed to start voice control")
-            setConnectionStatus("error")
+            setConnectionStatus("Connection Error")
         }
     }
 
@@ -514,28 +543,53 @@ export default function TeleprompterRealtime(props: Props) {
                 lastMatchIndexRef.current = matchIndex
                 setCurrentWordIndex(matchIndex)
                 
-                // Auto-scroll
+                // Auto-scroll to keep active word vertically centered on the center line
                 requestAnimationFrame(() => {
                     if (scriptRef.current) {
                         const container = scriptRef.current
+                        // Find the word element, skipping stage directions (which have index -1)
                         const wordElement = container.querySelector(`[data-word-index="${j}"]`) as HTMLElement
                         if (wordElement) {
-                            const containerHeight = container.clientHeight
-                            const containerScrollTop = container.scrollTop
+                            // Get the word's position relative to the viewport
+                            const wordRect = wordElement.getBoundingClientRect()
+                            const wordCenterY = wordRect.top + (wordRect.height / 2)
                             
-                            // Get word position relative to container
-                            const wordTop = wordElement.offsetTop
-                            const wordBottom = wordTop + wordElement.offsetHeight
+                            // The center line is at 50% of viewport height
+                            const centerLineY = window.innerHeight / 2
                             
-                            // Only scroll if word is near bottom of visible area
-                            const visibleBottom = containerScrollTop + containerHeight
-                            const scrollThreshold = containerScrollTop + (containerHeight * 0.7)
+                            // Calculate how much we need to scroll to align word center with center line
+                            const scrollAdjustment = wordCenterY - centerLineY
+                            let targetScroll = container.scrollTop + scrollAdjustment
                             
-                            if (wordBottom > scrollThreshold) {
-                                // Scroll just enough to keep word in upper 1/3 of screen
-                                const targetScroll = wordTop - (containerHeight * 0.3)
-                                setScrollPosition(Math.max(0, targetScroll))
+                            // Look ahead to find the next speakable word (skipping stage directions)
+                            // Check up to 10 words ahead to handle stage directions and paragraph breaks
+                            let nextSpeakableWord: HTMLElement | null = null
+                            for (let lookAhead = 1; lookAhead <= 10; lookAhead++) {
+                                const candidate = container.querySelector(`[data-word-index="${j + lookAhead}"]`) as HTMLElement
+                                if (candidate) {
+                                    nextSpeakableWord = candidate
+                                    break
+                                }
                             }
+                            
+                            // If we found a next speakable word, check if it's below the viewport
+                            if (nextSpeakableWord) {
+                                const nextWordRect = nextSpeakableWord.getBoundingClientRect()
+                                const viewportBottom = window.innerHeight
+                                
+                                // If the next speakable word is below the center line, 
+                                // we need to scroll ahead to prepare for smooth reading
+                                if (nextWordRect.top > centerLineY) {
+                                    // Calculate how much to scroll to center the next word
+                                    const nextWordCenter = nextWordRect.top + (nextWordRect.height / 2)
+                                    const nextWordAdjustment = nextWordCenter - centerLineY
+                                    
+                                    // Use the larger of the two scroll values to ensure upcoming content is visible
+                                    targetScroll = Math.max(targetScroll, container.scrollTop + nextWordAdjustment)
+                                }
+                            }
+                            
+                            setScrollPosition(Math.max(0, targetScroll))
                         }
                     }
                 })
@@ -572,7 +626,7 @@ export default function TeleprompterRealtime(props: Props) {
             audioElementRef.current = null
         }
         setIsListening(false)
-        setConnectionStatus("disconnected")
+        setConnectionStatus("Ready to Record")
     }
 
     // Auto-scroll effect
@@ -582,6 +636,29 @@ export default function TeleprompterRealtime(props: Props) {
         }
     }, [scrollPosition])
 
+    // Initial centering: align first speakable word with center line on mount
+    React.useEffect(() => {
+        if (scriptRef.current && currentWordIndex === 0) {
+            const container = scriptRef.current
+            // Find the first speakable word (index 0)
+            const firstWord = container.querySelector('[data-word-index="0"]') as HTMLElement
+            if (firstWord) {
+                // Get the word's position relative to the viewport
+                const wordRect = firstWord.getBoundingClientRect()
+                const wordCenterY = wordRect.top + (wordRect.height / 2)
+                
+                // The center line is at 50% of viewport height
+                const centerLineY = window.innerHeight / 2
+                
+                // Calculate how much we need to scroll to align word center with center line
+                const scrollAdjustment = wordCenterY - centerLineY
+                const targetScroll = container.scrollTop + scrollAdjustment
+                
+                setScrollPosition(Math.max(0, targetScroll))
+            }
+        }
+    }, [paragraphs]) // Re-run when script changes
+
     // Connect video stream to video element when camera is enabled
     React.useEffect(() => {
         if (isCameraEnabled && videoPreviewRef.current && videoStreamRef.current) {
@@ -590,6 +667,23 @@ export default function TeleprompterRealtime(props: Props) {
             videoPreviewRef.current.srcObject = null
         }
     }, [isCameraEnabled, showRecordingPrep])
+
+    // Update elapsed time during recording
+    React.useEffect(() => {
+        if (isRecording && recordingStartTime) {
+            const interval = setInterval(() => {
+                setElapsedTime(Math.floor((Date.now() - recordingStartTime) / 1000))
+            }, 1000)
+            return () => clearInterval(interval)
+        }
+    }, [isRecording, recordingStartTime])
+
+    // Format elapsed time as MM:SS
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return `${mins}:${secs.toString().padStart(2, '0')}`
+    }
 
     return (
         <div
@@ -637,6 +731,22 @@ export default function TeleprompterRealtime(props: Props) {
                 />
             )}
             
+            {/* Center Line Indicator */}
+            {!showRecordingPrep && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: "50%",
+                        left: 0,
+                        right: 0,
+                        height: "2px",
+                        backgroundColor: "rgba(255, 255, 255, 0.2)",
+                        zIndex: 3,
+                        pointerEvents: "none",
+                    }}
+                />
+            )}
+            
             {/* Script Display */}
             <div
                 ref={scriptRef}
@@ -645,8 +755,10 @@ export default function TeleprompterRealtime(props: Props) {
                     height: "100%",
                     overflowY: "auto",
                     overflowX: "hidden",
-                    padding: width < 768 ? "20px" : "40px",
-                    paddingBottom: width < 768 ? "120px" : "120px",
+                    paddingTop: "50vh",
+                    paddingBottom: "calc(50vh + 200px)", // Extra padding to ensure last lines can center
+                    paddingLeft: width < 768 ? "20px" : "40px",
+                    paddingRight: width < 768 ? "20px" : "40px",
                     scrollBehavior: "smooth",
                     display: "flex",
                     justifyContent: "center",
@@ -668,21 +780,39 @@ export default function TeleprompterRealtime(props: Props) {
                         let wordIndex = 0
                         return paragraphs.map((paragraph: string, paraIndex: number) => {
                             const paraWords = paragraph.split(/\s+/)
+                            let insideBrackets = false
+                            
                             const paraWordElements = paraWords.map((word: string, localIndex: number) => {
-                                const globalIndex = wordIndex++
+                                // Track if we're entering a stage direction
+                                if (word.includes('[')) {
+                                    insideBrackets = true
+                                }
+                                
+                                const isStageDirection = insideBrackets
+                                
+                                // Only increment wordIndex for non-stage-direction words
+                                const globalIndex = isStageDirection ? -1 : wordIndex++
+                                
+                                // Track if we're exiting a stage direction
+                                if (word.includes(']')) {
+                                    insideBrackets = false
+                                }
+                                
                                 return (
                                     <span
-                                        key={globalIndex}
+                                        key={`${paraIndex}-${localIndex}`}
                                         data-word-index={globalIndex}
                                         style={{
                                             backgroundColor:
-                                                globalIndex < currentWordIndex
+                                                !isStageDirection && globalIndex < currentWordIndex
                                                     ? highlightColor
                                                     : "transparent",
                                             padding: "2px 4px",
                                             marginRight: "8px",
                                             display: "inline",
                                             transition: "background-color 0.3s",
+                                            color: isStageDirection ? "rgba(255, 255, 255, 0.4)" : textColor,
+                                            fontStyle: isStageDirection ? "italic" : "normal",
                                         }}
                                     >
                                         {word}{" "}
@@ -713,6 +843,28 @@ export default function TeleprompterRealtime(props: Props) {
                     boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.3)",
                 }}
             >
+                {/* Progress Bar */}
+                <div
+                    style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        height: "4px",
+                        backgroundColor: "rgba(255, 255, 255, 0.1)",
+                        overflow: "hidden",
+                    }}
+                >
+                    <div
+                        style={{
+                            height: "100%",
+                            width: `${currentWordIndex > 0 ? Math.round((currentWordIndex / words.length) * 100) : 0}%`,
+                            backgroundColor: highlightColor,
+                            transition: "width 0.3s ease-out",
+                        }}
+                    />
+                </div>
+                
                 {/* Centered Record Button */}
                 {enableVideoRecording && uploadcarePublicKey ? (
                     <button
@@ -749,7 +901,7 @@ export default function TeleprompterRealtime(props: Props) {
                 ) : enableVoiceControl && (
                     <button
                         onClick={isListening ? stopVoiceControl : startVoiceControl}
-                        disabled={connectionStatus === "connecting"}
+                        disabled={connectionStatus === "Connecting..."}
                         style={{
                             position: "absolute",
                             left: "50%",
@@ -761,13 +913,13 @@ export default function TeleprompterRealtime(props: Props) {
                             border: "none",
                             backgroundColor: isListening ? "#ff4444" : "#4CAF50",
                             color: "white",
-                            cursor: connectionStatus === "connecting" ? "wait" : "pointer",
+                            cursor: connectionStatus === "Connecting..." ? "wait" : "pointer",
                             fontWeight: "bold",
                             touchAction: "manipulation",
                             WebkitTapHighlightColor: "transparent",
                         }}
                     >
-                        {connectionStatus === "connecting" ? "Connecting..." :
+                        {connectionStatus === "Connecting..." ? "Connecting..." :
                          isListening ? "Stop Voice Control" : "Start Voice Control"}
                     </button>
                 )}
@@ -783,8 +935,8 @@ export default function TeleprompterRealtime(props: Props) {
                     textAlign: "right",
                     display: width < 480 ? "none" : "block",
                 }}>
-                    {isRecording ? "🔴 Recording" : connectionStatus}
-                    {currentWordIndex > 0 && ` | Progress: ${Math.round((currentWordIndex / words.length) * 100)}%`}
+                    {isRecording ? `🔴 Recording ${formatTime(elapsedTime)}` : connectionStatus}
+                    {!isRecording && currentWordIndex > 0 && ` | Progress: ${Math.round((currentWordIndex / words.length) * 100)}%`}
                 </div>
             </div>
 
@@ -963,16 +1115,14 @@ export default function TeleprompterRealtime(props: Props) {
                         
                         <div style={{ marginBottom: "12px" }}>
                             <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
-                                <strong style={{ color: "#4CAF50" }}>1.</strong> Frame your shot using the grid
+                                <strong>1.</strong> Frame your shot
                             </div>
+
                             <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
-                                <strong style={{ color: "#ff9800" }}>2.</strong> Click "Start Recording" below
-                            </div>
-                            <div style={{ color: "#ccc", marginBottom: "8px", fontSize: width < 768 ? "13px" : "14px" }}>
-                                <strong style={{ color: "#2196F3" }}>3.</strong> Watch the 3-2-1 countdown
+                                <strong>2.</strong> Wait for the countdown
                             </div>
                             <div style={{ color: "#ccc", fontSize: width < 768 ? "13px" : "14px" }}>
-                                <strong style={{ color: "#e91e63" }}>4.</strong> Read your script - it will scroll as you speak
+                                <strong>3.</strong> Start speaking
                             </div>
                         </div>
                         
@@ -983,7 +1133,7 @@ export default function TeleprompterRealtime(props: Props) {
                             fontStyle: "italic",
                             lineHeight: 1.4,
                         }}>
-                            Your camera will appear as a blurred background behind the teleprompter text.
+                            Your camera will be blurred behind the teleprompter.
                         </p>
                     </div>
                     
